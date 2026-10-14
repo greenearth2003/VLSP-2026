@@ -1,0 +1,17 @@
+base=redimnet_M_mix params=4.812M
+head init from centroids /home/jovyan/code/VLSP2026/exp/emb/redimnet_M_mix/traincohort5_modefull_197d931b.npy
+frozen: ['stem', 'stage0', 'stage1', 'stage2'] trainable=3.422M
+teacher: redimnet2_b6_mix_teacher
+step 0 dev_eer=6.700
+step 100 loss=3.893 acc=0.823 kd=0.0737 lr=0.00e+00 1.91s/it
+step 200 loss=3.474 acc=0.859 kd=0.0749 lr=0.00e+00 1.69s/it
+step 300 loss=3.008 acc=0.873 kd=0.0748 lr=4.99e-05 1.62s/it
+step 400 loss=2.716 acc=0.887 kd=0.0749 lr=4.94e-05 1.58s/it
+step 500 loss=2.568 acc=0.892 kd=0.0747 lr=4.87e-05 1.56s/it
+step 500 dev_eer=5.763 *best*
+step 600 loss=2.664 acc=0.882 kd=0.0743 lr=4.76e-05 1.76s/it
+step 700 loss=2.603 acc=0.889 kd=0.0762 lr=4.64e-05 1.60s/it
+step 800 loss=2.571 acc=0.890 kd=0.0761 lr=4.48e-05 1.48s/it
+step 900 loss=2.529 acc=0.890 kd=0.0765 lr=4.30e-05 1.44s/it
+step 1000 loss=2.484 acc=0.886 kd=0.0768 lr=4.11e-05 1.45s/it
+step 1000 dev_eer=6.528

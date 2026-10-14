@@ -1,0 +1,14 @@
+{"sys": "redimnet_M_mix", "backend": "cos", "split": "hold", "eer": 5.813, "mindcf": 0.2582, "d0-2": 8.63, "d2-4": 5.31, "d4-8": 4.17, "d8-inf": 3.15}
+{"sys": "redimnet_M_mix", "backend": "qmf", "split": "hold", "eer": 5.317, "mindcf": 0.21, "d0-2": 8.34, "d2-4": 5.1, "d4-8": 4.22, "d8-inf": 3.15}
+{"sys": "F03_M_s3_aug_bnfz_var_best", "backend": "cos", "split": "hold", "eer": 5.467, "mindcf": 0.1864, "d0-2": 8.51, "d2-4": 5.2, "d4-8": 3.96, "d8-inf": 3.15}
+{"sys": "F03_M_s3_aug_bnfz_var_best", "backend": "qmf", "split": "hold", "eer": 5.166, "mindcf": 0.1564, "d0-2": 8.17, "d2-4": 5.09, "d4-8": 3.97, "d8-inf": 3.15}
+{"sys": "W01_wise_F03_M_avg", "backend": "cos", "split": "hold", "eer": 5.421, "mindcf": 0.1982, "d0-2": 8.51, "d2-4": 5.1, "d4-8": 4.01, "d8-inf": 3.15}
+{"sys": "W01_wise_F03_M_avg", "backend": "qmf", "split": "hold", "eer": 5.149, "mindcf": 0.1613, "d0-2": 8.23, "d2-4": 5.04, "d4-8": 3.94, "d8-inf": 3.15}
+{"sys": "K01_M_s3_bnfz_long_rkdB6_avg", "backend": "cos", "split": "hold", "eer": 5.552, "mindcf": 0.2022, "d0-2": 8.04, "d2-4": 5.19, "d4-8": 3.72, "d8-inf": 3.15}
+{"sys": "K01_M_s3_bnfz_long_rkdB6_avg", "backend": "qmf", "split": "hold", "eer": 5.047, "mindcf": 0.1657, "d0-2": 7.96, "d2-4": 5.03, "d4-8": 3.9, "d8-inf": 3.15}
+{"cmp": "F03_M_s3_aug_bnfz_var_best vs redimnet_M_mix", "backend": "cos", "split": "hold", "diff": -0.346, "ci": [-0.86, 0.059], "p_better": 0.94}
+{"cmp": "F03_M_s3_aug_bnfz_var_best vs redimnet_M_mix", "backend": "qmf", "split": "hold", "diff": -0.151, "ci": [-0.532, 0.173], "p_better": 0.8}
+{"cmp": "W01_wise_F03_M_avg vs redimnet_M_mix", "backend": "cos", "split": "hold", "diff": -0.393, "ci": [-0.776, -0.037], "p_better": 0.987}
+{"cmp": "W01_wise_F03_M_avg vs redimnet_M_mix", "backend": "qmf", "split": "hold", "diff": -0.168, "ci": [-0.473, 0.024], "p_better": 0.937}
+{"cmp": "K01_M_s3_bnfz_long_rkdB6_avg vs redimnet_M_mix", "backend": "cos", "split": "hold", "diff": -0.261, "ci": [-0.719, 0.169], "p_better": 0.893}
+{"cmp": "K01_M_s3_bnfz_long_rkdB6_avg vs redimnet_M_mix", "backend": "qmf", "split": "hold", "diff": -0.27, "ci": [-0.663, 0.086], "p_better": 0.933}

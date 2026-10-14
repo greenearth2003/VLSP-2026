@@ -1,0 +1,32 @@
+[project]
+name = "vlsp2026-sred"
+version = "0.1.0"
+description = "VLSP 2026 Speaker Recognition on Edge Devices"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "torch==2.5.1",
+    "torchaudio==2.5.1",
+    "numpy<2.2",
+    "scipy",
+    "scikit-learn",
+    "pandas",
+    "soundfile",
+    "tqdm",
+    "huggingface_hub",
+    "pyyaml",
+    "einops",
+    "safetensors>=0.8.0",
+    "onnx>=1.23.2",
+    "onnxruntime>=1.24.3",
+    "py-spy>=0.4.2",
+    "gguf>=0.19.0",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu124" }
+torchaudio = { index = "pytorch-cu124" }

@@ -1,0 +1,220 @@
+"""Speaker embedding model zoo.
+
+Every model returned by `load_model` takes a float waveform batch [B, T] at
+16 kHz in [-1, 1] and returns embeddings [B, D] (not L2-normalised).
+"""
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+import torch
+import torch.nn as nn
+import torchaudio
+
+ROOT = Path(__file__).resolve().parent.parent
+PRETRAINED = ROOT / "pretrained"
+REDIMNET_V1_SRC = ROOT / ".cache/torch/hub/IDRnD_ReDimNet_master"
+REDIMNET_V2_SRC = ROOT / ".cache/torch/hub/PalabraAI_redimnet2_main"
+WESPEAKER_SRC = ROOT / "third_party/wespeaker"
+
+
+def count_params(model: nn.Module) -> int:
+    return sum(p.numel() for p in model.parameters())
+
+
+# ----------------------------------------------------------------------------
+# ReDimNet v1 (IDRnD)
+# ----------------------------------------------------------------------------
+def _load_redimnet_v1(ckpt: Path) -> nn.Module:
+    sys.path.insert(0, str(REDIMNET_V1_SRC))
+    from redimnet.model import ReDimNetWrap
+
+    full = torch.load(ckpt, map_location="cpu", weights_only=False)
+    model = ReDimNetWrap(**full["model_config"])
+    res = model.load_state_dict(full["state_dict"])
+    assert not res.missing_keys and not res.unexpected_keys, res
+    return model
+
+
+# ----------------------------------------------------------------------------
+# ReDimNet2 (PalabraAI) -- weights only available as MLX safetensors on HF,
+# converted to PyTorch layout here (MLX conv = channels-last).
+# ----------------------------------------------------------------------------
+def build_redimnet2(config: dict) -> nn.Module:
+    sys.path.insert(0, str(REDIMNET_V2_SRC))
+    from redimnet2.redimnet2 import ReDimNet2Wrap
+
+    return ReDimNet2Wrap(**config)
+
+
+def _load_redimnet2_mlx(mlx_dir: Path) -> nn.Module:
+    from safetensors.numpy import load_file
+
+    config = json.loads((mlx_dir / "config.json").read_text())
+    model = build_redimnet2(config)
+    sd = model.state_dict()
+    weights = load_file(str(mlx_dir / "weights.safetensors"))
+    new_sd = {}
+    for k, v in sd.items():
+        if k not in weights:
+            assert k.endswith("num_batches_tracked"), k
+            new_sd[k] = v
+            continue
+        w = torch.from_numpy(weights[k].copy())
+        if tuple(w.shape) != tuple(v.shape):
+            if w.ndim == 4:  # Conv2d: (O, H, W, I) -> (O, I, H, W)
+                w = w.permute(0, 3, 1, 2)
+            elif w.ndim == 3:  # Conv1d: (O, K, I) -> (O, I, K)
+                w = w.permute(0, 2, 1)
+            assert tuple(w.shape) == tuple(v.shape), (k, w.shape, v.shape)
+        new_sd[k] = w.contiguous().to(v.dtype)
+    model.load_state_dict(new_sd)
+    model.model_config = config
+    return model
+
+
+# ----------------------------------------------------------------------------
+# WeSpeaker models (fbank front-end + CMN, wav scaled to int16 range)
+# ----------------------------------------------------------------------------
+class WeSpeakerWrap(nn.Module):
+    def __init__(self, backbone: nn.Module, num_mel_bins: int = 80):
+        super().__init__()
+        self.backbone = backbone
+        self.num_mel_bins = num_mel_bins
+
+    def fbank(self, wav: torch.Tensor) -> torch.Tensor:
+        feats = []
+        for w in wav:
+            f = torchaudio.compliance.kaldi.fbank(
+                w.unsqueeze(0) * (1 << 15),
+                num_mel_bins=self.num_mel_bins,
+                frame_length=25,
+                frame_shift=10,
+                dither=0.0,
+                sample_frequency=16000,
+                window_type="hamming",
+                use_energy=False,
+            )
+            feats.append(f - f.mean(dim=0, keepdim=True))
+        return torch.stack(feats)
+
+    def forward(self, wav: torch.Tensor) -> torch.Tensor:
+        out = self.backbone(self.fbank(wav))
+        return out[-1] if isinstance(out, tuple) else out
+
+
+def _load_wespeaker(model_dir: Path, ckpt_name: str) -> nn.Module:
+    import yaml
+
+    import types
+
+    # Register bare packages so importing wespeaker.models.* skips the heavy
+    # package __init__ (which pulls CLI deps such as silero_vad).
+    for pkg, sub in (("wespeaker", "wespeaker"), ("wespeaker.models", "wespeaker/models")):
+        if pkg not in sys.modules:
+            m = types.ModuleType(pkg)
+            m.__path__ = [str(WESPEAKER_SRC / sub)]
+            sys.modules[pkg] = m
+    cfg = yaml.safe_load((model_dir / "config.yaml").read_text())
+    name = cfg["model"]
+    if name.startswith("SimAM"):
+        import wespeaker.models.samresnet as mod
+    elif name.startswith("ECAPA"):
+        import wespeaker.models.ecapa_tdnn as mod
+    else:
+        import wespeaker.models.resnet as mod
+    backbone = getattr(mod, name)(**cfg["model_args"])
+    sd = torch.load(model_dir / ckpt_name, map_location="cpu", weights_only=False)
+    sd = {k: v for k, v in sd.items() if not k.startswith("projection")}
+    res = backbone.load_state_dict(sd, strict=False)
+    assert not res.missing_keys, res.missing_keys
+    return WeSpeakerWrap(backbone)
+
+
+# ----------------------------------------------------------------------------
+REGISTRY = {
+    # name: (loader, path)
+    "redimnet_M_mix": ("v1", "redimnet_v1/M-vb2+vox2+cnc-ft_mix.pt"),
+    "redimnet_S_mix": ("v1", "redimnet_v1/S-vb2+vox2+cnc-ft_mix.pt"),
+    "redimnet_b3_vox2": ("v1", "redimnet_v1/b3-vox2-ft_lm.pt"),
+    "redimnet_b4_vox2": ("v1", "redimnet_v1/b4-vox2-ft_lm.pt"),
+    "redimnet_b5_vox2": ("v1", "redimnet_v1/b5-vox2-ft_lm.pt"),
+    "redimnet2_b4_vox2": ("v2mlx", "causal__redimnet2-b4-vox2-lm-mlx"),
+    "redimnet2_b3_vox2": ("v2mlx", "causal__redimnet2-b3-vox2-lm-mlx"),
+    "redimnet2_b3_mix": ("v2mlx", "causal__redimnet2-b3-vb2-vox2-cnc2-lm-mlx"),
+    "wespeaker_r34_lm": ("wespeaker:avg_model", "Wespeaker__wespeaker-voxceleb-resnet34-LM"),
+    "wespeaker_samr34_vb2": ("wespeaker:avg_model.pt", "gaunernst__wespeaker-voxblink2-samresnet34-ft"),
+    "wespeaker_ecapa512_lm": ("wespeaker:avg_model.pt", "Wespeaker__wespeaker-ecapa-tdnn512-LM"),
+}
+
+
+def load_model(name: str) -> nn.Module:
+    """Load a pretrained model by registry name, or a fine-tuned checkpoint path (.pt
+    produced by sred.train)."""
+    if name not in REGISTRY and Path(name).exists():
+        return load_finetuned(Path(name))
+    kind, rel = REGISTRY[name]
+    path = PRETRAINED / rel
+    if kind == "v1":
+        model = _load_redimnet_v1(path)
+    elif kind == "v2mlx":
+        model = _load_redimnet2_mlx(path)
+    elif kind == "v2gguf":
+        model = _load_redimnet2_gguf(path)
+    elif kind.startswith("wespeaker:"):
+        model = _load_wespeaker(path, kind.split(":", 1)[1])
+    else:
+        raise ValueError(kind)
+    return model.eval()
+
+
+def load_finetuned(ckpt: Path) -> nn.Module:
+    state = torch.load(ckpt, map_location="cpu", weights_only=False)
+    model = load_model(state["base_model"])
+    model.load_state_dict(state["model"])
+    return model.eval()
+
+
+# ----------------------------------------------------------------------------
+# ReDimNet2-B6 (vb2+vox2+cnc2_v0-lm) from the OpenASR GGUF pack (fp16 weights).
+# Approved checkpoint, 12.3M params -> usable only as a TEACHER (> 7M).
+# ----------------------------------------------------------------------------
+def _load_redimnet2_gguf(path: Path) -> nn.Module:
+    import inspect
+
+    import numpy as np
+    from gguf import GGUFReader
+
+    r = GGUFReader(str(path))
+    f = r.fields["redimnet2.model_config_json"]
+    cfg = json.loads(bytes(f.parts[f.data[0]]).decode())
+    # OpenASR flattens stages as [sf, st, n_blocks, conv_exp, att_red]; kernels are (3,3)
+    cfg["stages_setup"] = [((int(a), int(b)), int(n), int(e) if float(e).is_integer() else e, [(3, 3)], int(red))
+                           for a, b, n, e, red in cfg["stages_setup"]]
+    sys.path.insert(0, str(REDIMNET_V2_SRC))
+    from redimnet2.redimnet2 import ReDimNet2Wrap
+
+    ok = set(inspect.signature(ReDimNet2Wrap.__init__).parameters)
+    cfg = {k: v for k, v in cfg.items() if k in ok}
+    cfg.setdefault("causal", "none")
+    model = ReDimNet2Wrap(**cfg)
+    tensors = {t.name: t for t in r.tensors}
+    sd = model.state_dict()
+    new_sd = {}
+    for k, v in sd.items():
+        if k not in tensors:
+            # deterministic front-end buffers (STFT kernels, mel banks) are not packed
+            assert k.endswith("num_batches_tracked") or k.startswith("spec."), k
+            new_sd[k] = v
+            continue
+        a = np.asarray(tensors[k].data, dtype=np.float32)
+        assert a.size == v.numel(), (k, a.shape, v.shape)
+        new_sd[k] = torch.from_numpy(a.reshape(tuple(v.shape)).copy())
+    model.load_state_dict(new_sd)
+    model.model_config = cfg
+    return model
+
+
+REGISTRY["redimnet2_b6_mix_teacher"] = ("v2gguf", "OpenASR__redimnet2-b6-cn/redimnet2-b6-cn-fp16.oasr")

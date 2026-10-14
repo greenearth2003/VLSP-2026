@@ -1,0 +1,4 @@
+base=redimnet_M_mix params=4.812M
+head init from centroids /home/jovyan/code/VLSP2026/exp/emb/redimnet_M_mix/traincohort5_modefull_197d931b.npy
+frozen: ['stem', 'stage0'] trainable=4.446M
+step 0 dev_eer=6.700

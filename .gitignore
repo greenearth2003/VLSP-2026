@@ -1,0 +1,33 @@
+# --- Python / environment ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.ipynb_checkpoints/
+.cache/
+
+# --- Large / regenerable artifacts ---
+# pretrained checkpoints (~430 MB, downloaded from HuggingFace)
+SRED/pretrained/
+# third-party source (separate git clone):
+#   git clone https://github.com/wenet-e2e/wespeaker.git SRED/third_party/wespeaker
+#   git -C SRED/third_party/wespeaker checkout 9fecd6cb4f47475d01761d87c826298dff4ef18c
+SRED/third_party/
+# fine-tuned checkpoints and cached embeddings
+SRED/exp/ft/
+SRED/exp/emb/
+# submission score files (~2 MB each, regenerate with scripts/make_submission.sh)
+SRED/submissions/
+
+# model weights anywhere
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.safetensors
+*.oasr
+
+# --- Misc ---
+*.log.tmp
+nohup.out
+.DS_Store
