@@ -1,0 +1,11 @@
+{
+ "n_utts_in": 58404,
+ "n_spk_in": 1900,
+ "drop_suspicious": 446,
+ "cross_id_near_dup_pairs": 49,
+ "drop_total_after_2": 504,
+ "split_bimodal_ids": 43,
+ "merge_pairs_cos_ge_0.9": 57,
+ "n_utts_out": 57900,
+ "n_spk_out": 1905
+}

@@ -31,3 +31,9 @@ SRED/submissions/
 *.log.tmp
 nohup.out
 .DS_Store
+# versioned releases: keep MANIFEST.json in git, large binaries/scores out
+SRED/releases/**/*.pt
+SRED/releases/**/*.txt
+SRED/releases/**/*.zip
+SRED/exp/logs/*.log
+SRED/exp/logs/*.out

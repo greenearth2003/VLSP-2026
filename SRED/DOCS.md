@@ -46,7 +46,7 @@ python -m sred.evaluate --model redimnet_M_mix --tag zeroshot
 python -m sred.train --base redimnet_M_mix --name F01 --train-from stage3 --bs 32 --crop-sec 2 --amp bf16
 
 # 3) Tạo file nộp cho một tập test bất kỳ (ví dụ private test)
-scripts/make_submission.sh <trials.txt> <audio_dir> private <out.txt> exp/ft/W01_wise_F03_M/avg.pt qmf_dur
+scripts/make_submission.sh <trials.txt> <audio_dir> private <out.txt> releases/version_141026_W01/sred_W01_redimnetM_141026.pt qmf_dur
 ```
 
 ---
@@ -77,7 +77,7 @@ VLSP-2026/
     │   ├── emb/              #   embedding đã trích xuất (cache)
     │   ├── logs/             #   log huấn luyện / đánh giá
     │   └── results.jsonl     #   bảng kết quả đánh giá (mỗi dòng một lần chạy)
-    └── submissions/          # file điểm số theo đúng định dạng nộp bài
+    └── releases/             # các phiên bản đã nộp: version_<DDMMYY>_<hệ thống>/ (model, file điểm, zip, MANIFEST.json)
 ```
 
 ### 3.1. `sred/`: mã nguồn chính
@@ -280,18 +280,18 @@ Mốc so sánh trên P-dev (cosine / QMF): E00 5,78 / 5,02 · F01 5,66 / 5,19 ·
 
 ### 7.1. Bảng tra: thực nghiệm → file đầu ra
 
-| Thực nghiệm | Checkpoint (`exp/ft/`) | Embedding (`exp/emb/`) | Log (`exp/logs/`) | File nộp (`submissions/`) |
+| Thực nghiệm | Checkpoint (`exp/ft/`) | Embedding (`exp/emb/`) | Log (`exp/logs/`) | File nộp (`releases/`) |
 |---|---|---|---|---|
-| E00 | (dùng `pretrained/redimnet_v1/M-...mix.pt`) | `redimnet_M_mix/` | `zeroshot_redimnet_M_mix.log` | `E00_qmf_public.txt` |
+| E00 | (dùng `pretrained/redimnet_v1/M-...mix.pt`) | `redimnet_M_mix/` | `zeroshot_redimnet_M_mix.log` | `version_111026_E00/sred_E00_public_111026.txt` |
 | E01–E03 | – | – | `quick_*.log` | – |
 | T00 | (dùng `pretrained/OpenASR__redimnet2-b6-cn`) | `redimnet2_b6_mix_teacher/` | `quick_b6.log`, `eval_T00_B6.log` | – |
-| F01 | `F01_M_s3_aug/` (`best.pt`, `last.pt`) | `F01_M_s3_aug_best/` | `F01.log`, `eval_F01.log` | `F01_public.txt` |
+| F01 | `F01_M_s3_aug/` (`best.pt`, `last.pt`) | `F01_M_s3_aug_best/` | `F01.log`, `eval_F01.log` | `version_111026_F01/sred_F01_public_111026.txt` |
 | F02 | `F02_M_s3_aug_rkdB6/` | – | `F02.log` | – |
-| F03 | `F03_M_s3_aug_bnfz_var/` (`best.pt`, `last.pt`) | `F03_M_s3_aug_bnfz_var_best/` | `F03.log`, `eval_F03.log` | `F03_qmf_public.txt` |
+| F03 | `F03_M_s3_aug_bnfz_var/` (`best.pt`, `last.pt`) | `F03_M_s3_aug_bnfz_var_best/` | `F03.log`, `eval_F03.log` | `version_111026_F03/sred_F03_public_111026.txt` |
 | F04 | `F04_M_s1_aug_bnfz_var/` (chỉ log + args) | – | `F04.log` | – |
 | F05 | `F05_M_s3_bnfz_long/` (`step1500…9000.pt`, `avg.pt`) | `F05_M_s3_bnfz_long_avg/` | `F05.log`, `protocol_F05.log` | – |
 | K01 | `K01_M_s3_bnfz_long_rkdB6/` (`step*.pt`, `avg.pt`) | `K01_M_s3_bnfz_long_rkdB6_avg/` | `K01.log`, `protocol_K01.log` | – |
-| **W01** | **`W01_wise_F03_M/avg.pt`** | `W01_wise_F03_M_avg/` | `protocol_W01.log` | **`W01_qmf_public.txt`** |
+| **W01** | **`W01_wise_F03_M/avg.pt`** | `W01_wise_F03_M_avg/` | `protocol_W01.log` | **`version_141026_W01/sred_W01_public_141026.{txt,zip}`** |
 | Mở P-hold | – | – | `protocol_reveal.log` | – |
 
 ### 7.2. Ý nghĩa từng loại đầu ra
@@ -320,21 +320,21 @@ Có cache thì đánh giá lại chỉ mất vài giây thay vì ~25 phút.
 **Bảng kết quả (`exp/results.jsonl`)**: mỗi dòng là một lần chạy `sred.evaluate`, gồm thời gian, mô hình, số tham số,
 thời gian trích embedding, và EER + minDCF của **mọi back-end** (cosine, center, asnorm, lda, plda, qmf_dur…).
 
-**File nộp (`submissions/`)**: 49.993 dòng, đúng định dạng `file1.wav file2.wav score`:
+**File nộp (`releases/`)**: 49.993 dòng, đúng định dạng `file1.wav file2.wav score`:
 
 | File | Hệ thống | Ghi chú |
 |---|---|---|
-| **`W01_qmf_public.txt`** | **W01 + QMF** | **Bản nộp chính thức** (4,81M tham số) |
-| `F03_qmf_public.txt` | F03 + QMF | Dự phòng |
-| `E00_qmf_public.txt` | ReDimNet-M gốc + centering + QMF | Mốc so sánh |
-| `F01_public.txt` | F01, cosine | Bản cũ |
+| **`version_141026_W01/sred_W01_public_141026.{txt,zip}`** | **W01 + QMF** | **Bản nộp chính thức** (4,81M tham số) |
+| `version_111026_F03/sred_F03_public_111026.txt` | F03 + QMF | Dự phòng |
+| `version_111026_E00/sred_E00_public_111026.txt` | ReDimNet-M gốc + centering + QMF | Mốc so sánh |
+| `version_111026_F01/sred_F01_public_111026.txt` | F01, cosine | Bản cũ |
 
 ### 7.3. Tạo file nộp cho private test
 
 ```bash
 cd /home/jovyan/code/VLSP-2026/SRED
-scripts/make_submission.sh <private_trials.txt> <private_audio_dir> private submissions/W01_qmf_private.txt \
-    exp/ft/W01_wise_F03_M/avg.pt qmf_dur
+scripts/make_submission.sh <private_trials.txt> <private_audio_dir> private releases/<version>_W01/sred_W01_private_<DDMMYY>.txt \
+    releases/version_141026_W01/sred_W01_redimnetM_141026.pt qmf_dur
 ```
 
 Script tự in ba dòng kiểm tra: `mismatched lines: 0`, `bad score lines: 0`, và số dòng hai file phải bằng nhau.

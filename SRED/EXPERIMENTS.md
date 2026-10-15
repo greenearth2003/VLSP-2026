@@ -130,3 +130,29 @@ Gains replicate in sign on P-hold but shrink (−0.47 → −0.17 for W01): the 
 Honest expectation for private: ~0.2–0.5 EER better than zero-shot M + QMF, minDCF clearly better.
 Submission: `submissions/W01_qmf_public.txt` (4.81M params). Private command:
 `scripts/make_submission.sh <trials> <audio_dir> private <out> exp/ft/W01_wise_F03_M/avg.pt qmf_dur`.
+
+## Round v3 (2026-10-14) — EDA-driven experiments, pre-registered
+
+Source: `docs/version_141026_eda_report.md` §8. No test information enters any system: cleaning uses train +
+pretrained embeddings only; VAD / F0 are computed from audio; public labels/IDs only score P-dev (P-hold is spent).
+
+Common training recipe (= reproducible W01 recipe): F03 hyper-parameters, 3000 steps, seed 0, no test monitoring,
+checkpoint **step 2000**, then WiSE 0.5 with pretrained M → `exp/ft/W_<run>/avg.pt`; back-end QMF(dur).
+
+| ID | change | judged against |
+|---|---|---|
+| R0 | none (re-run of the W01 recipe, measures re-training noise) | W01 (sanity) |
+| E1 | energy VAD at inference (drop silences > 0.4 s; durations for QMF = speech duration) on W01 | W01 |
+| E5 | QMF + \|log F0 ratio\| features (F0 from audio) on W01 | W01 |
+| E2 | cleaned train list `lists/train_clean.txt` (`eda/make_clean_list.py`) | R0 |
+| E3a | `--aug 0` (SpecAugment only) | R0 |
+| E3b | `--aug-profile matched` (no band-limit/μ-law, reverb p0.15 RT60≤0.5, + pause insertion p0.3) | R0 |
+| E4 | `--crop-sec 2.5 --min-crop-sec 1.0 --spk-balanced` | R0 |
+
+Rule: accept if paired speaker-bootstrap P(better) > 0.95 on P-dev (QMF back-end). Final system = W01-recipe +
+all accepted training changes (one combined run C1) + accepted inference changes; if nothing is accepted, W01 stays.
+
+Results v3 (P-dev, QMF; vs W01):
+- **E1 VAD** −0.06 [−0.25, +0.08], P=0.81 (cosine −0.12, P=0.86) → not accepted (small, consistent-sign gain).
+- **E5 F0-QMF** +0.01 [−0.04, +0.03], P=0.56 → rejected (embedding already encodes gender).
+- E1+E5 −0.05, P=0.83 → not accepted.

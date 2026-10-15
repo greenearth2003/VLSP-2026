@@ -57,15 +57,29 @@ class Protocol:
         items = cohort_subset(read_train_list(), per_spk=cohort_per_spk)
         lengths = json.loads((ROOT / "lists/train_lengths.json").read_text())
         self.coh_spk = [s for s, _ in items]
+        self.coh_rels = [r for _, r in items]
         self.coh_dur = np.array([lengths[r] / 16000 for _, r in items])
         self.mind = np.minimum(self.dur[self.ia], self.dur[self.ib])
 
-    def scores(self, emb_dir: Path) -> dict[str, np.ndarray]:
-        emb = np.load(next(Path(emb_dir).glob("public_modefull_*.npy")))
-        coh = np.load(next(Path(emb_dir).glob("traincohort5_modefull_*.npy")))
-        e, c = l2n(emb), l2n(coh)
+    def scores(self, spec: str) -> dict[str, np.ndarray]:
+        """spec = '<model name or ckpt>[::vad][::f0]'. Embeddings must be cached (see extract_system)."""
+        from .data import PUBLIC_DIR, TRAIN_DIR
+        from .embed import cache_key
+        from .vad import file_info_cached
+        model, opts = parse_spec(spec)
+        kw = dict(mode="full", **({"vad": True} if "vad" in opts else {}))
+        e = l2n(np.load(cache_key(model, "public", self.files, **kw)))
+        c = l2n(np.load(cache_key(model, "traincohort5", self.coh_rels, **kw)))
         cos = np.sum(e[self.ia] * e[self.ib], 1)
-        qmf = QMF(use_asnorm=False).fit(c, self.coh_spk, self.coh_dur).score(e, self.dur, self.ia, self.ib)
+        dur, coh_dur, f0p, f0c = self.dur, self.coh_dur, None, None
+        if opts:
+            ip = file_info_cached(self.files, PUBLIC_DIR, "public")
+            ic = file_info_cached(self.coh_rels, TRAIN_DIR, "traincohort5")
+            if "vad" in opts:
+                dur, coh_dur = ip[:, 0], ic[:, 0]
+            if "f0" in opts:
+                f0p, f0c = ip[:, 1], ic[:, 1]
+        qmf = QMF(use_asnorm=False).fit(c, self.coh_spk, coh_dur, f0=f0c).score(e, dur, self.ia, self.ib, f0=f0p)
         return {"cos": cos, "qmf": qmf}
 
     def eer(self, s, split, idx=None):
@@ -95,45 +109,64 @@ class Protocol:
                     round(float(np.percentile(d, 97.5)), 3)], p_better=round(float((d < 0).mean()), 3))
 
 
-def extract_system(model: str, P: "Protocol") -> Path:
+def parse_spec(spec: str) -> tuple[str, set]:
+    model, *opts = spec.split("::")
+    assert set(opts) <= {"vad", "f0"}, opts
+    return model, set(opts)
+
+
+def system_name(spec: str) -> str:
+    model, opts = parse_spec(spec)
+    name = f"{Path(model).parent.name}_{Path(model).stem}" if "/" in model else model
+    return name + "".join(f"+{o}" for o in sorted(opts))
+
+
+def extract_system(spec: str, P: "Protocol") -> None:
     from .data import PUBLIC_DIR, TRAIN_DIR
-    from .embed import cache_key, extract_cached
+    from .embed import extract_cached
     from .models import load_model
+    model, opts = parse_spec(spec)
+    kw = dict(mode="full", **({"vad": True} if "vad" in opts else {}))
     fn = lambda: load_model(model)  # noqa: E731
-    extract_cached(model, fn, "public", P.files, PUBLIC_DIR, mode="full")
-    items = cohort_subset(read_train_list(), per_spk=5)
-    rels = [r for _, r in items]
-    extract_cached(model, fn, "traincohort5", rels, TRAIN_DIR, mode="full")
-    return cache_key(model, "public", P.files, mode="full").parent
+    extract_cached(model, fn, "public", P.files, PUBLIC_DIR, **kw)
+    extract_cached(model, fn, "traincohort5", P.coh_rels, TRAIN_DIR, **kw)
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("emb_dirs", nargs="+", help="exp/emb/<system> dirs; first one is the reference")
+    ap.add_argument("systems", nargs="+", help="'<model or ckpt>[::vad][::f0]'; the first one is the reference")
     ap.add_argument("--reveal", action="store_true", help="also report P-hold (use once, at the end)")
     ap.add_argument("--n-boot", type=int, default=300)
-    ap.add_argument("--extract", action="store_true",
-                    help="emb_dirs are model names / ckpt paths: extract (cached) embeddings first")
+    ap.add_argument("--extract", action="store_true", help="extract (cached) embeddings first")
+    ap.add_argument("--out", default=None, help="append JSON lines here")
     args = ap.parse_args(argv)
     P = Protocol()
     if args.extract:
-        args.emb_dirs = [str(extract_system(m, P)) for m in args.emb_dirs]
+        for sp in args.systems:
+            extract_system(sp, P)
     print(f"P-dev trials {P.mask['dev'].sum()} ({len(P.groups['dev'])} spk), "
           f"P-hold trials {P.mask['hold'].sum()} ({len(P.groups['hold'])} spk)")
     splits = ["dev", "hold"] if args.reveal else ["dev"]
-    S = {Path(d).name: P.scores(Path(d)) for d in args.emb_dirs}
-    ref = Path(args.emb_dirs[0]).name
+    S = {system_name(sp): P.scores(sp) for sp in args.systems}
+    ref = system_name(args.systems[0])
+    lines = []
     for name, sc in S.items():
         for b, s in sc.items():
             for sp in splits:
-                print(json.dumps({"sys": name, "backend": b, "split": sp, **P.report(s, sp)}))
+                lines.append({"sys": name, "backend": b, "split": sp, **P.report(s, sp)})
     for name, sc in S.items():
         if name == ref:
             continue
         for b in sc:
             for sp in splits:
-                print(json.dumps({"cmp": f"{name} vs {ref}", "backend": b, "split": sp,
-                                  **P.paired(S[ref][b], sc[b], sp, n=args.n_boot)}))
+                lines.append({"cmp": f"{name} vs {ref}", "backend": b, "split": sp,
+                              **P.paired(S[ref][b], sc[b], sp, n=args.n_boot)})
+    for ln in lines:
+        print(json.dumps(ln))
+    if args.out:
+        with open(args.out, "a") as f:
+            for ln in lines:
+                f.write(json.dumps(ln) + "\n")
 
 
 if __name__ == "__main__":

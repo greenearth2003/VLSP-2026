@@ -1,0 +1,22 @@
+{
+  "version": "version_111026",
+  "system": "F03",
+  "description": "F01 + frozen BN + 1.5-3s crops + lr 2e-5; checkpoint step 2000",
+  "backend": "qmf_dur",
+  "params_M": 4.812,
+  "files": {
+    "sred_F03_redimnetM_111026.pt": {
+      "md5": "a5a46e78cf893727d193480decf0f77d",
+      "source": "exp/ft/F03_M_s3_aug_bnfz_var/best.pt"
+    },
+    "sred_F03_public_111026.txt": {
+      "md5": "09cb18c864ba2c03fef100566352b06d",
+      "source": "submissions/F03_qmf_public.txt"
+    }
+  },
+  "public_test": {
+    "eer": 4.877,
+    "mindcf01": 0.2829,
+    "lines": 49993
+  }
+}

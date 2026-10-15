@@ -69,11 +69,15 @@ def cohort_subset(items: list[tuple[str, str]], per_spk: int = 5, seed: int = 0)
 
 
 class WavDataset(torch.utils.data.Dataset):
-    def __init__(self, files: list[str], root: Path):
-        self.files, self.root = files, Path(root)
+    def __init__(self, files: list[str], root: Path, vad: bool = False):
+        self.files, self.root, self.vad = files, Path(root), vad
 
     def __len__(self):
         return len(self.files)
 
     def __getitem__(self, i):
-        return i, torch.from_numpy(load_wav(self.root / self.files[i]))
+        wav = load_wav(self.root / self.files[i])
+        if self.vad:
+            from .vad import vad_trim
+            wav = np.ascontiguousarray(vad_trim(wav))
+        return i, torch.from_numpy(wav)

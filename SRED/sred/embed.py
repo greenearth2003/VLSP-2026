@@ -109,7 +109,7 @@ def extract(model, files: list[str], root: Path, device: str = "cuda", num_worke
     if kw.pop("batched", False):
         return extract_batched(model, files, root, device, num_workers)
     model = model.to(device).eval()
-    ds = WavDataset(files, root)
+    ds = WavDataset(files, root, vad=kw.pop("vad", False))
     dl = torch.utils.data.DataLoader(ds, batch_size=None, num_workers=num_workers, prefetch_factor=8)
     embs = [None] * len(files)
     for i, wav in tqdm(dl, total=len(ds), mininterval=30, desc="embed"):

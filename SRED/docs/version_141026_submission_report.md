@@ -230,7 +230,7 @@ Diễn biến (log `exp/ft/F03_M_s3_aug_bnfz_var/log.txt`, khoảng 1.35 s/bư�
 | 2500 | 1.65 | 0.924 | 5.70 |
 | 3000 | 1.55 | 0.927 | 5.56 |
 
-**Checkpoint được dùng là bước 2000** (`exp/ft/F03_M_s3_aug_bnfz_var/best.pt`, `step=2000`,
+**Checkpoint được dùng là bước 2000** (`exp/ft/F03_M_s3_aug_bnfz_var/best.pt` = `releases/version_111026_F03/sred_F03_redimnetM_111026.pt`, `step=2000`,
 md5 `a5a46e78cf893727d193480decf0f77d`). Nó được chọn bằng 2.000 cặp ngẫu nhiên lấy từ public test (§11).
 
 ---
@@ -247,10 +247,10 @@ Phép trung bình áp dụng cho mọi tensor dạng float, bao gồm cả runni
 khi train, hai giá trị này trùng nhau giữa hai model. Các tensor nguyên như `num_batches_tracked` được lấy từ F03.
 
 ```bash
-python scripts/wise_interp.py exp/ft/F03_M_s3_aug_bnfz_var/best.pt exp/ft/W01_wise_F03_M/avg.pt --alpha 0.5
+python scripts/wise_interp.py releases/version_111026_F03/sred_F03_redimnetM_111026.pt releases/version_141026_W01/sred_W01_redimnetM_141026.pt --alpha 0.5
 ```
 
-Lệnh này tạo lại đúng `exp/ft/W01_wise_F03_M/avg.pt` (sai khác tối đa 0.0 so với file đã nộp).
+Lệnh này tạo lại đúng `releases/version_141026_W01/sred_W01_redimnetM_141026.pt` (sai khác tối đa 0.0 so với file đã nộp).
 
 - Số tham số vẫn là **4.812 M**, cùng kiến trúc với ReDimNet-M nên không tốn thêm chi phí suy luận.
 - **Lý do dùng:** fine-tune làm model trôi khỏi lời giải pretrained. Thí nghiệm F05 (train dài gấp 3) cho thấy
@@ -314,7 +314,7 @@ Cuối cùng nén `results.txt` thành `results.zip` (dùng `zip -j`, để file
 
 ```bash
 scripts/make_submission.sh <trial_list> <audio_dir> <split_name> <out>/results.txt \
-    exp/ft/W01_wise_F03_M/avg.pt qmf_dur
+    releases/version_141026_W01/sred_W01_redimnetM_141026.pt qmf_dur
 cd <out> && zip -j results.zip results.txt
 ```
 
@@ -337,7 +337,7 @@ Script thực hiện:
 2. Train theo đúng công thức F03 (§5) với seed 0, **không dùng bất kỳ dữ liệu test nào**: lưu checkpoint mỗi
    500 bước và lấy thẳng `step2000.pt`.
 3. Chạy `scripts/wise_interp.py` với α = 0.5 để tạo `exp/ft/W01_F03_repro/avg.pt`.
-4. Suy luận, chấm điểm với `qmf_dur`, ghi `submissions/F03_repro/results.{txt,zip}`.
+4. Suy luận, chấm điểm với `qmf_dur`, ghi `releases/version_<DDMMYY>_F03_repro/` (model `.pt`, `sred_F03_repro_public_<DDMMYY>.txt` và `.zip`).
 
 Tổng thời gian khoảng 1.5–2 giờ trên một L4 dùng riêng (khoảng 0.5–0.7 s/bước train).
 
@@ -345,7 +345,7 @@ Tổng thời gian khoảng 1.5–2 giờ trên một L4 dùng riêng (khoảng 
 
 ```bash
 scripts/make_submission.sh $SRED_DATA/public_test/public-test.txt $SRED_DATA/public_test/data public_final \
-    submissions/final/results.txt exp/ft/W01_wise_F03_M/avg.pt qmf_dur
+    releases/version_DDMMYY_W01/sred_W01_public_DDMMYY.txt releases/version_141026_W01/sred_W01_redimnetM_141026.pt qmf_dur
 ```
 
 ---
@@ -417,7 +417,7 @@ Câu ngắn dưới 2 s là nguồn lỗi chính.
 2. **Không tất định ở mức bit.** `cudnn.benchmark`, TF32, bf16, và việc crop ngẫu nhiên trong các worker
    DataLoader làm trọng số sau khi train lại khác bản gốc một chút. Theo phân tích bootstrap, độ dao động EER
    cỡ ±0.2–0.3 là bình thường. Muốn có đúng file đã nộp thì dùng checkpoint gốc:
-   `exp/ft/W01_wise_F03_M/avg.pt` (md5 `712e1923c0ffb6d44d5bf64d578915c1`).
+   `releases/version_141026_W01/sred_W01_redimnetM_141026.pt` (md5 `712e1923c0ffb6d44d5bf64d578915c1`).
 3. **Cache embedding** trong `exp/emb/<run>_<stem>/` được đặt khoá theo `<thư mục run>_<tên file>` và tên split.
    Khi train lại với cùng tên run, cần xoá cache cũ.
 4. **Nguồn pretrained.** Do GitHub release bị chặn trong môi trường này, checkpoint ReDimNet-M được tải từ HF

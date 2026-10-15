@@ -20,7 +20,9 @@ RUN=${1:-F03_repro}
 .venv/bin/python scripts/wise_interp.py exp/ft/$RUN/step2000.pt exp/ft/W01_$RUN/avg.pt --alpha 0.5
 
 # 3) public-test scores with duration-aware QMF calibration
-mkdir -p submissions/$RUN
+#    -> releases/version_<DDMMYY>_<RUN>/{sred_<RUN>_redimnetM_<DDMMYY>.pt, sred_<RUN>_public_<DDMMYY>.txt/.zip}
+V=$(date +%d%m%y); D=releases/version_${V}_$RUN; mkdir -p $D
+cp exp/ft/W01_$RUN/avg.pt $D/sred_${RUN}_redimnetM_${V}.pt
 scripts/make_submission.sh $SRED_DATA/public_test/public-test.txt $SRED_DATA/public_test/data public \
-  submissions/$RUN/results.txt exp/ft/W01_$RUN/avg.pt qmf_dur
-(cd submissions/$RUN && zip -j results.zip results.txt)
+  $D/results.txt $D/sred_${RUN}_redimnetM_${V}.pt qmf_dur
+(cd $D && zip -j sred_${RUN}_public_${V}.zip results.txt && mv results.txt sred_${RUN}_public_${V}.txt)

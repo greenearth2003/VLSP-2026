@@ -1,0 +1,14 @@
+{"sys": "W01_wise_F03_M_avg", "backend": "cos", "split": "dev", "eer": 5.081, "mindcf": 0.2775, "d0-2": 11.29, "d2-4": 4.67, "d4-8": 2.07, "d8-inf": 0.64}
+{"sys": "W01_wise_F03_M_avg", "backend": "qmf", "split": "dev", "eer": 4.55, "mindcf": 0.2884, "d0-2": 11.16, "d2-4": 4.67, "d4-8": 2.07, "d8-inf": 0.64}
+{"sys": "W01_wise_F03_M_avg+vad", "backend": "cos", "split": "dev", "eer": 4.961, "mindcf": 0.237, "d0-2": 10.94, "d2-4": 4.4, "d4-8": 2.01, "d8-inf": 0.64}
+{"sys": "W01_wise_F03_M_avg+vad", "backend": "qmf", "split": "dev", "eer": 4.492, "mindcf": 0.2573, "d0-2": 10.97, "d2-4": 4.48, "d4-8": 2.08, "d8-inf": 0.62}
+{"sys": "W01_wise_F03_M_avg+f0", "backend": "cos", "split": "dev", "eer": 5.081, "mindcf": 0.2775, "d0-2": 11.29, "d2-4": 4.67, "d4-8": 2.07, "d8-inf": 0.64}
+{"sys": "W01_wise_F03_M_avg+f0", "backend": "qmf", "split": "dev", "eer": 4.561, "mindcf": 0.3011, "d0-2": 11.09, "d2-4": 4.67, "d4-8": 2.12, "d8-inf": 0.64}
+{"sys": "W01_wise_F03_M_avg+f0+vad", "backend": "cos", "split": "dev", "eer": 4.961, "mindcf": 0.237, "d0-2": 10.94, "d2-4": 4.4, "d4-8": 2.01, "d8-inf": 0.64}
+{"sys": "W01_wise_F03_M_avg+f0+vad", "backend": "qmf", "split": "dev", "eer": 4.498, "mindcf": 0.2552, "d0-2": 10.89, "d2-4": 4.48, "d4-8": 2.08, "d8-inf": 0.64}
+{"cmp": "W01_wise_F03_M_avg+vad vs W01_wise_F03_M_avg", "backend": "cos", "split": "dev", "diff": -0.12, "ci": [-0.317, 0.101], "p_better": 0.86}
+{"cmp": "W01_wise_F03_M_avg+vad vs W01_wise_F03_M_avg", "backend": "qmf", "split": "dev", "diff": -0.059, "ci": [-0.249, 0.081], "p_better": 0.807}
+{"cmp": "W01_wise_F03_M_avg+f0 vs W01_wise_F03_M_avg", "backend": "cos", "split": "dev", "diff": 0.0, "ci": [0.0, 0.0], "p_better": 0.0}
+{"cmp": "W01_wise_F03_M_avg+f0 vs W01_wise_F03_M_avg", "backend": "qmf", "split": "dev", "diff": 0.011, "ci": [-0.039, 0.029], "p_better": 0.563}
+{"cmp": "W01_wise_F03_M_avg+f0+vad vs W01_wise_F03_M_avg", "backend": "cos", "split": "dev", "diff": -0.12, "ci": [-0.317, 0.101], "p_better": 0.86}
+{"cmp": "W01_wise_F03_M_avg+f0+vad vs W01_wise_F03_M_avg", "backend": "qmf", "split": "dev", "diff": -0.052, "ci": [-0.256, 0.065], "p_better": 0.827}

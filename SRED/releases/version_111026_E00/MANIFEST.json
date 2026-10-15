@@ -1,0 +1,19 @@
+{
+  "version": "version_111026",
+  "system": "E00",
+  "description": "ReDimNet-M zero-shot (pretrained M-vb2+vox2+cnc-ft_mix)",
+  "backend": "center+qmf_dur",
+  "params_M": 4.812,
+  "files": {
+    "sred_E00_public_111026.txt": {
+      "md5": "df6621582975dc532acb6d6a64950f9b",
+      "source": "submissions/E00_qmf_public.txt"
+    }
+  },
+  "model": "redimnet_M_mix (pretrained/redimnet_v1/M-vb2+vox2+cnc-ft_mix.pt)",
+  "public_test": {
+    "eer": 5.004,
+    "mindcf01": 0.3566,
+    "lines": 49993
+  }
+}

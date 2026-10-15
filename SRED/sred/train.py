@@ -193,6 +193,9 @@ def main(argv=None):
     ap.add_argument("--train-from", default=None,
                     help="freeze backbone modules before this one, e.g. stage3 (cheaper backward)")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--train-list", default=None, help="alternative 'spk rel' list (e.g. cleaned)")
+    ap.add_argument("--aug-profile", default="default", choices=["default", "matched"],
+                    help="matched: no band-limit/mu-law, milder reverb, + pause insertion (EDA-driven)")
     ap.add_argument("--resume", action="store_true", help="continue from <out>/resume.pt if present")
     ap.add_argument("--workers", type=int, default=7)
     args = ap.parse_args(argv)
@@ -214,7 +217,7 @@ def main(argv=None):
         log.write(s + "\n")
         log.flush()
 
-    items = read_train_list()
+    items = read_train_list(Path(args.train_list)) if args.train_list else read_train_list()
     spks = sorted({s for s, _ in items})
     spk2id = {s: i for i, s in enumerate(spks)}
     lengths = train_lengths(items)
@@ -233,7 +236,15 @@ def main(argv=None):
     ck = cache_key(args.base, "traincohort5", [r for _, r in coh_items], mode="full")
     if init_state is not None and "head" in init_state:
         init = None
-    elif ck.exists():
+    else:
+        if not ck.exists():  # e.g. cleaned list: slice the cached full-train embeddings of the base model
+            full = read_train_list()
+            ck_all = cache_key(args.base, "trainall", [r for _, r in full], mode="full")
+            if ck_all.exists():
+                pos = {r: i for i, (_, r) in enumerate(full)}
+                ck.parent.mkdir(parents=True, exist_ok=True)
+                np.save(ck, np.load(ck_all)[[pos[r] for _, r in coh_items]])
+    if init_state is None and ck.exists():
         cents = speaker_means(np.load(ck), [s for s, _ in coh_items])
         init = torch.from_numpy(cents)
         P("head init from centroids", ck)
@@ -258,8 +269,12 @@ def main(argv=None):
             p.requires_grad_(False)
         P("teacher:", args.teacher or "frozen copy of base")
 
-    aug = Augmenter(p_noise=0.6 * args.aug, p_reverb=0.3 * args.aug, p_band=0.2 * args.aug,
-                    p_eq=0.3 * args.aug, p_mulaw=0.1 * args.aug) if args.aug > 0 else None
+    if args.aug_profile == "matched":
+        aug = Augmenter(p_noise=0.6 * args.aug, p_reverb=0.15 * args.aug, p_band=0.0, p_eq=0.3 * args.aug,
+                        p_mulaw=0.0, rt60_range=(0.2, 0.5), p_silence=0.3 * args.aug) if args.aug > 0 else None
+    else:
+        aug = Augmenter(p_noise=0.6 * args.aug, p_reverb=0.3 * args.aug, p_band=0.2 * args.aug,
+                        p_eq=0.3 * args.aug, p_mulaw=0.1 * args.aug) if args.aug > 0 else None
 
     ds = CropDataset(items, spk2id, lengths, args.crop_sec)
     dl = torch.utils.data.DataLoader(ds, batch_size=args.bs, sampler=EndlessSampler(items, args.spk_balanced, args.seed),

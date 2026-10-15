@@ -1,7 +1,7 @@
 #!/bin/bash
 # Usage: scripts/make_submission.sh <trial_list> <audio_root> <split_name> <out.txt> [model] [backend]
 # Example (private test):
-#   scripts/make_submission.sh $SRED_DATA/private_test/private-test.txt $SRED_DATA/private_test/data private submissions/private.txt
+#   scripts/make_submission.sh $SRED_DATA/private_test/private-test.txt $SRED_DATA/private_test/data private releases/version_DDMMYY_W01/results.txt releases/version_141026_W01/sred_W01_redimnetM_141026.pt qmf_dur
 set -e
 cd /home/jovyan/code/VLSP-2026/SRED && source env.sh
 MODEL=${5:-redimnet_M_mix}

@@ -56,7 +56,7 @@ def fft_conv(x, h):
 class Augmenter:
     def __init__(self, p_noise=0.6, p_reverb=0.3, p_band=0.2, p_eq=0.3, p_mulaw=0.1,
                  snr_babble=(13, 20), snr_noise=(5, 20), noise_bank: torch.Tensor | None = None,
-                 snr_bank=(0, 15)):
+                 snr_bank=(0, 15), rt60_range=(0.2, 0.9), p_silence=0.0, silence_s=(0.2, 1.0)):
         self.__dict__.update(locals())
         del self.__dict__["self"]
 
@@ -73,7 +73,7 @@ class Augmenter:
         # reverberation first (source in room), then additive noise
         m = self._rand(B, dev) < self.p_reverb
         if m.any():
-            rir = synth_rir(int(m.sum()), dev)
+            rir = synth_rir(int(m.sum()), dev, rt60_range=self.rt60_range)
             y = fft_conv(x[m], rir)
             x[m] = y * (_rms(x[m]) / _rms(y))
 
@@ -135,6 +135,16 @@ class Augmenter:
             peak = y.abs().amax(-1, keepdim=True).clamp_min(1e-6)
             q = AF.mu_law_encoding(y / peak, 256)
             x[m] = AF.mu_law_decoding(q, 256) * peak
+
+        m = self._rand(B, dev) < self.p_silence  # insert a pause (low-level noise) at a random position
+        if m.any():
+            for i in m.nonzero().squeeze(1).tolist():
+                L = int(float(torch.empty(1).uniform_(*self.silence_s)) * SR)
+                L = min(L, T // 2)
+                pos = int(torch.randint(0, T - L + 1, (1,)))
+                floor = _rms(x[i:i + 1]) * 10 ** (-40 / 20)
+                sil = torch.randn(L, device=dev) * floor[0]
+                x[i] = torch.cat([x[i, :pos], sil, x[i, pos:]])[:T]
 
         # keep amplitude in a sane range
         peak = x.abs().amax(-1, keepdim=True)

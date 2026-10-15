@@ -1,0 +1,26 @@
+{
+  "version": "version_141026",
+  "system": "W01",
+  "description": "FINAL: WiSE-FT 0.5*F03(step2000) + 0.5*pretrained ReDimNet-M",
+  "backend": "qmf_dur",
+  "params_M": 4.812,
+  "files": {
+    "sred_W01_redimnetM_141026.pt": {
+      "md5": "712e1923c0ffb6d44d5bf64d578915c1",
+      "source": "exp/ft/W01_wise_F03_M/avg.pt"
+    },
+    "sred_W01_public_141026.txt": {
+      "md5": "240ac3cc979f531171795dbf2eea7e70",
+      "source": "submissions/final/results.txt"
+    },
+    "sred_W01_public_141026.zip": {
+      "md5": "4434ea92e3a238ad15819ba3c11abd30",
+      "note": "contains results.txt (submission format)"
+    }
+  },
+  "public_test": {
+    "eer": 4.848,
+    "mindcf01": 0.2947,
+    "lines": 49993
+  }
+}

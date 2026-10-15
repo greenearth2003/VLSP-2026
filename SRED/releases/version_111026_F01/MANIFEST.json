@@ -1,0 +1,22 @@
+{
+  "version": "version_111026",
+  "system": "F01",
+  "description": "Fine-tune M from stage3, AAM+aug, 2s crops, lr 5e-5 (best on dev2000)",
+  "backend": "cosine",
+  "params_M": 4.812,
+  "files": {
+    "sred_F01_redimnetM_111026.pt": {
+      "md5": "2eb7d810a2c2d1dd3c9df0d2da76f618",
+      "source": "exp/ft/F01_M_s3_aug/best.pt"
+    },
+    "sred_F01_public_111026.txt": {
+      "md5": "06baf6c43b0da4dfd29754900f8561be",
+      "source": "submissions/F01_public.txt"
+    }
+  },
+  "public_test": {
+    "eer": 5.513,
+    "mindcf01": 0.3508,
+    "lines": 49993
+  }
+}
