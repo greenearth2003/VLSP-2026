@@ -49,6 +49,36 @@ def vad_trim(wav: torch.Tensor, pad_frames: int = 15, min_keep_sec: float = 1.0)
 
 
 @torch.inference_mode()
+def dominant_speaker_wav(model, wav: torch.Tensor, win_sec: float = 1.0, min_total_sec: float = 3.0,
+                         min_minor_frac: float = 0.2, split_cos: float = 0.5) -> torch.Tensor:
+    """Keep only the dominant voice of a clip: VAD-trim, cut into `win_sec` windows, embed each, 2-means on
+    cosine; if the two clusters are clearly different voices (centroid cosine < split_cos) and the minority is
+    not tiny, return the concatenated windows of the larger cluster. Otherwise return the VAD-trimmed clip."""
+    sr = 16000
+    w = vad_trim(wav)
+    win = int(win_sec * sr)
+    n = w.shape[-1] // win
+    if w.shape[-1] < int(min_total_sec * sr) or n < 3:
+        return w
+    segs = w[: n * win].view(n, win)
+    e = F.normalize(model(segs), dim=-1)
+    S = e @ e.T
+    i, j = divmod(int(torch.argmin(S)), n)  # farthest pair as seeds
+    cent = torch.stack([e[i], e[j]])
+    for _ in range(10):
+        a = (e @ cent.T).argmax(1)
+        if a.min() == a.max():
+            return w
+        cent = F.normalize(torch.stack([e[a == k].mean(0) for k in (0, 1)]), dim=-1)
+    a = (e @ cent.T).argmax(1)
+    n0 = int((a == 0).sum())
+    if min(n0, n - n0) < max(1, int(round(min_minor_frac * n))) or float(cent[0] @ cent[1]) >= split_cos:
+        return w
+    dom = 0 if n0 >= n - n0 else 1
+    return segs[a == dom].reshape(-1)
+
+
+@torch.inference_mode()
 def embed_wav(model, wav: torch.Tensor, mode: str = "full", crop_sec: float = 3.0,
               hop_sec: float = 1.5, min_sec: float = 0.5, max_sec: float = 60.0) -> torch.Tensor:
     """wav: 1-D tensor on device. Returns an un-normalised embedding [D].
@@ -62,6 +92,8 @@ def embed_wav(model, wav: torch.Tensor, mode: str = "full", crop_sec: float = 3.
     sr = 16000
     if mode == "vad":
         wav, mode = vad_trim(wav), "full"
+    elif mode == "dom":
+        wav, mode = dominant_speaker_wav(model, wav), "full"
     wav = wav[: int(max_sec * sr)]
     if wav.shape[-1] < int(min_sec * sr):  # repeat-pad very short audio
         reps = int(np.ceil(min_sec * sr / max(1, wav.shape[-1])))

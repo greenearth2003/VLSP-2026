@@ -1,0 +1,67 @@
+base=redimnet_M_mix params=4.812M
+head loaded from init ckpt
+long->short KD from cached teacher exp/emb/W_G05_B6_avg/trainfull_modefull_f5574c4d.npy dim=192 kd=2.0 rkd=20.0
+step 0 dev_eer=inf
+step 100 loss=5.939 acc=0.983 kd=0.9819 lr=1.00e-05 3.81s/it
+step 200 loss=5.147 acc=0.987 kd=0.8548 lr=9.99e-06 2.53s/it
+step 300 loss=4.656 acc=0.986 kd=0.7260 lr=9.97e-06 2.08s/it
+step 400 loss=4.881 acc=0.982 kd=0.6384 lr=9.94e-06 1.82s/it
+step 500 loss=4.663 acc=0.985 kd=0.5695 lr=9.89e-06 1.67s/it
+step 600 loss=4.280 acc=0.984 kd=0.5085 lr=9.83e-06 1.57s/it
+step 700 loss=4.372 acc=0.986 kd=0.4679 lr=9.76e-06 1.50s/it
+step 800 loss=4.494 acc=0.984 kd=0.4362 lr=9.67e-06 1.44s/it
+step 900 loss=3.908 acc=0.992 kd=0.4015 lr=9.58e-06 1.41s/it
+step 1000 loss=4.303 acc=0.984 kd=0.3818 lr=9.46e-06 1.38s/it
+step 1100 loss=4.244 acc=0.985 kd=0.3617 lr=9.34e-06 1.35s/it
+step 1200 loss=4.045 acc=0.986 kd=0.3436 lr=9.21e-06 1.33s/it
+step 1300 loss=3.913 acc=0.986 kd=0.3242 lr=9.06e-06 1.31s/it
+step 1400 loss=4.010 acc=0.985 kd=0.3156 lr=8.91e-06 1.30s/it
+step 1500 loss=4.156 acc=0.984 kd=0.3070 lr=8.74e-06 1.27s/it
+step 1600 loss=3.707 acc=0.989 kd=0.2914 lr=8.56e-06 1.23s/it
+step 1700 loss=4.012 acc=0.986 kd=0.2927 lr=8.38e-06 1.19s/it
+step 1800 loss=3.599 acc=0.990 kd=0.2770 lr=8.18e-06 1.16s/it
+step 1900 loss=3.700 acc=0.987 kd=0.2681 lr=7.98e-06 1.13s/it
+step 2000 loss=3.606 acc=0.988 kd=0.2637 lr=7.77e-06 1.11s/it
+step 2100 loss=3.696 acc=0.991 kd=0.2613 lr=7.55e-06 1.09s/it
+step 2200 loss=3.749 acc=0.988 kd=0.2549 lr=7.33e-06 1.07s/it
+step 2300 loss=3.671 acc=0.986 kd=0.2499 lr=7.10e-06 1.05s/it
+step 2400 loss=3.562 acc=0.989 kd=0.2445 lr=6.86e-06 1.03s/it
+step 2500 loss=3.707 acc=0.982 kd=0.2440 lr=6.62e-06 1.01s/it
+step 2600 loss=3.602 acc=0.986 kd=0.2403 lr=6.38e-06 1.00s/it
+step 2700 loss=3.600 acc=0.988 kd=0.2366 lr=6.13e-06 0.99s/it
+step 2800 loss=3.852 acc=0.989 kd=0.2423 lr=5.88e-06 0.97s/it
+step 2900 loss=3.657 acc=0.985 kd=0.2321 lr=5.63e-06 0.96s/it
+step 3000 loss=3.292 acc=0.993 kd=0.2261 lr=5.38e-06 0.95s/it
+step 3000 dev_eer=nan
+step 3100 loss=3.519 acc=0.988 kd=0.2307 lr=5.12e-06 0.93s/it
+step 3200 loss=3.579 acc=0.988 kd=0.2276 lr=4.87e-06 0.92s/it
+step 3300 loss=3.658 acc=0.986 kd=0.2292 lr=4.62e-06 0.90s/it
+step 3400 loss=3.491 acc=0.990 kd=0.2229 lr=4.37e-06 0.89s/it
+step 3500 loss=3.937 acc=0.980 kd=0.2332 lr=4.12e-06 0.87s/it
+step 3600 loss=3.579 acc=0.986 kd=0.2237 lr=3.88e-06 0.86s/it
+step 3700 loss=3.509 acc=0.990 kd=0.2190 lr=3.64e-06 0.85s/it
+step 3800 loss=3.466 acc=0.989 kd=0.2187 lr=3.40e-06 0.84s/it
+step 3900 loss=3.425 acc=0.986 kd=0.2138 lr=3.17e-06 0.82s/it
+step 4000 loss=3.318 acc=0.988 kd=0.2131 lr=2.95e-06 0.81s/it
+step 4100 loss=3.475 acc=0.988 kd=0.2162 lr=2.73e-06 0.81s/it
+step 4200 loss=3.425 acc=0.984 kd=0.2134 lr=2.52e-06 0.80s/it
+step 4300 loss=3.256 acc=0.991 kd=0.2121 lr=2.32e-06 0.79s/it
+step 4400 loss=3.282 acc=0.987 kd=0.2093 lr=2.12e-06 0.78s/it
+step 4500 loss=3.281 acc=0.989 kd=0.2103 lr=1.94e-06 0.77s/it
+step 4600 loss=3.646 acc=0.983 kd=0.2200 lr=1.76e-06 0.76s/it
+step 4700 loss=3.649 acc=0.981 kd=0.2160 lr=1.59e-06 0.75s/it
+step 4800 loss=3.278 acc=0.988 kd=0.2045 lr=1.44e-06 0.75s/it
+step 4900 loss=3.477 acc=0.992 kd=0.2132 lr=1.29e-06 0.74s/it
+step 5000 loss=3.615 acc=0.985 kd=0.2161 lr=1.16e-06 0.73s/it
+step 5100 loss=3.483 acc=0.983 kd=0.2095 lr=1.04e-06 0.73s/it
+step 5200 loss=3.499 acc=0.988 kd=0.2119 lr=9.24e-07 0.72s/it
+step 5300 loss=3.404 acc=0.989 kd=0.2118 lr=8.26e-07 0.72s/it
+step 5400 loss=3.409 acc=0.986 kd=0.2102 lr=7.40e-07 0.71s/it
+step 5500 loss=3.450 acc=0.987 kd=0.2102 lr=6.67e-07 0.71s/it
+step 5600 loss=3.413 acc=0.993 kd=0.2109 lr=6.07e-07 0.70s/it
+step 5700 loss=3.662 acc=0.983 kd=0.2121 lr=5.60e-07 0.69s/it
+step 5800 loss=3.429 acc=0.988 kd=0.2104 lr=5.27e-07 0.69s/it
+step 5900 loss=3.663 acc=0.980 kd=0.2158 lr=5.07e-07 0.69s/it
+step 6000 loss=3.367 acc=0.988 kd=0.2111 lr=5.00e-07 0.68s/it
+step 6000 dev_eer=nan
+done best_dev_eer=inf

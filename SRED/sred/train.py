@@ -177,6 +177,9 @@ def main(argv=None):
     ap.add_argument("--margin", type=float, default=0.2)
     ap.add_argument("--scale", type=float, default=30.0)
     ap.add_argument("--subcenters", type=int, default=3)
+    ap.add_argument("--margin-min-frac", type=float, default=1.0,
+                    help="duration-adaptive margin: margin * lerp(min_frac..1) as the crop goes min-crop-sec..crop-sec "
+                         "(short/low-quality crops get a smaller margin, cf. AdaFace / Adaptive Margin Circle Loss)")
     ap.add_argument("--aug", type=float, default=1.0, help="scale all augmentation probs; 0 disables")
     for k, h in (("speed", "speed perturbation 0.9-1.1"), ("pitch", "pitch shift +-2 semitones"),
                  ("tempo", "tempo 0.85-1.15, pitch kept"), ("gain", "level -20..+10 dB"),
@@ -358,6 +361,9 @@ def main(argv=None):
             n = int(round(random.uniform(args.min_crop_sec, args.crop_sec) * 4)) * 4000  # 0.25 s grid (few cudnn shapes)
             off = random.randint(0, wav.shape[1] - n)
             wav = wav[:, off:off + n]
+        if args.margin_min_frac < 1.0 and args.min_crop_sec:
+            frac = (wav.shape[1] / 16000 - args.min_crop_sec) / max(1e-6, args.crop_sec - args.min_crop_sec)
+            head.margin = args.margin * (args.margin_min_frac + (1 - args.margin_min_frac) * min(1.0, max(0.0, frac)))
         clean = wav
         if aug is not None:
             wav = aug(wav)

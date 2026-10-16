@@ -271,3 +271,22 @@ WISE_STEP=12000 scripts/c_sweep.sh redimnet_M_mix K21_M stem lists/clean/train_c
 # private test -> leaderboard zip (results.txt inside; checks order/format; refuses on missing audio)
 scripts/make_final_submission.sh <private-trials.txt> <private audio dir> result-private-MMDD.zip private
 ```
+
+## Round 2 (2026-10-16): pipeline techniques from the SV literature, on top of K21
+
+Mapped from the face-recognition pipeline (alignment / normalisation / embedding / margin losses).
+All judged vs K21 WiSE (P-dev 2.95 / P-hold 2.86 / cleaned 2.92 / full 4.50, minDCF 0.229).
+
+| idea | source | result |
+|---|---|---|
+| test-time multi-crop (`--mode crop`, `full+crop`) | aggregation | full 5.07 / 4.65 (crop 2 s / 3 s), 4.52 (full+crop) → no gain |
+| dominant-speaker extraction (`--mode dom`: VAD, 1 s windows, 2-means on window embeddings) | target-speaker SV (TASE-SVNet, Guided Speaker Embedding) | full **5.42**. 1 s-window clustering has no power: between-cluster cosine of known multi-voice files (0.64) ≈ clean files (0.69); it cut 12 % of ordinary clips. Needs a diarizer (none approved). |
+| large-margin fine-tuning L01 (6 s crops, m 0.5, lr 1e-5, KD anchor, 6k steps bs 16) | IDLab LMFT / ReDimNet2 stage 2 | ft 3.10 cleaned (overfits, train acc 0.99); + WiSE 2.88 / 4.54, minDCF 0.223 — tie (P 0.34); worse on < 1 s (5.92) as the literature warns |
+| adaptive LMFT L02 (2–6 s crops, margin 0.2→0.5 with crop length, otherwise L01) | SJTU adaptive LMFT | + WiSE **2.87 cleaned, P-dev 2.83, P-hold 2.82, full 4.50, minDCF 0.218** — best on every split but −0.05, P 0.69 → not significant |
+| duration-adaptive margin in the KD recipe K26 (m 0.3→0.1 for 3→0.75 s crops) | Adaptive Margin Circle Loss / AdaFace analogue | + WiSE 2.91 / 4.52 — tie (P 0.56) |
+| speech-enhancement front-end | — | not tried: literature consistent that separately trained SE hurts SV; no approved model |
+
+Conclusion: with the approved ≤ 7M checkpoints and this data the recipe is converged at ≈ 2.9 cleaned /
+4.5 full; label noise bounds full-public EER from below at ≈ 1.4, and < 3.0 would need ≈ 1.1 cleaned
+(half the 12.5M teacher's error). L02-WiSE (`exp/ft/W_L02_K21_almft/avg.pt`) is the preferred tie-breaker
+if a second submission is allowed (better minDCF, same full-public EER).
