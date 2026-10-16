@@ -56,13 +56,52 @@ class SubCenterAAM(nn.Module):
         return loss, acc
 
 
+def sample_balanced_len() -> float:
+    lo, hi = random.choices([(0.8, 1.5), (1.5, 2.0), (2.0, 3.0), (3.0, 6.0)], weights=[30, 25, 25, 20])[0]
+    return random.uniform(lo, hi)
+
+
+def supcon_loss(emb, lab, temp=0.1):
+    """Supervised contrastive loss (Khosla et al. 2020) over the batch."""
+    z = F.normalize(emb, dim=-1)
+    sim = z @ z.T / temp
+    eye = torch.eye(len(z), device=z.device, dtype=torch.bool)
+    pos = (lab[:, None] == lab[None, :]) & ~eye
+    sim = sim.masked_fill(eye, -1e9)
+    logp = sim - torch.logsumexp(sim, dim=1, keepdim=True)
+    has = pos.any(1)
+    if not has.any():
+        return torch.zeros((), device=z.device)
+    return -((logp * pos).sum(1)[has] / pos.sum(1)[has]).mean()
+
+
+class PKSampler(torch.utils.data.Sampler):
+    """Endless stream of P x K blocks: K utterances (with replacement if needed) of a random speaker."""
+
+    def __init__(self, items, k, seed=0):
+        self.k, self.seed = k, seed
+        by = {}
+        for i, (s, _) in enumerate(items):
+            by.setdefault(s, []).append(i)
+        self.by = [v for v in by.values() if len(v) >= 2]
+
+    def __iter__(self):
+        rng = random.Random(self.seed)
+        while True:
+            v = rng.choice(self.by)
+            yield from (rng.sample(v, self.k) if len(v) >= self.k else rng.choices(v, k=self.k))
+
+
 # ----------------------------------------------------------------------------
 def train_lengths(items, cache=ROOT / "lists/train_lengths.json"):
-    if cache.exists():
-        return json.loads(cache.read_text())
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    lens = {rel: sf.info(str(TRAIN_DIR / rel)).frames for _, rel in items}
-    cache.write_text(json.dumps(lens))
+    """Frame counts per file; entries missing from the cache (e.g. external absolute paths) are added."""
+    lens = json.loads(cache.read_text()) if cache.exists() else {}
+    missing = [rel for _, rel in items if rel not in lens]
+    if missing:
+        for rel in missing:
+            lens[rel] = sf.info(str(TRAIN_DIR / rel)).frames  # TRAIN_DIR / absolute path = absolute path
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(json.dumps(lens))
     return lens
 
 
@@ -196,6 +235,23 @@ def main(argv=None):
     ap.add_argument("--train-list", default=None, help="alternative 'spk rel' list (e.g. cleaned)")
     ap.add_argument("--aug-profile", default="default", choices=["default", "matched"],
                     help="matched: no band-limit/mu-law, milder reverb, + pause insertion (EDA-driven)")
+    ap.add_argument("--exclude-val", action="store_true", help="drop the v4 validation speakers (sred.valset)")
+    ap.add_argument("--crop-dist", default="uniform", choices=["uniform", "balanced"],
+                    help="balanced: per-batch length 0.8-1.5s 30%%, 1.5-2 25%%, 2-3 25%%, 3-6 20%% (needs --crop-sec 6)")
+    ap.add_argument("--consistency", type=float, default=0.0,
+                    help="lambda of short->long self-consistency 1-cos(e_short, sg(e_long)) (needs --crop-sec 6)")
+    ap.add_argument("--cons-mu", type=float, default=0.5, help="weight of the AAM loss on the long view")
+    ap.add_argument("--pk", type=int, default=0, help="P x K sampler: K utterances per speaker (0 = off)")
+    ap.add_argument("--supcon", type=float, default=0.0, help="weight of supervised contrastive loss")
+    ap.add_argument("--supcon-temp", type=float, default=0.1)
+    ap.add_argument("--proto", type=float, default=0.0,
+                    help="weight of prototypical loss: query (last of each P x K block, cropped 1-2 s) vs prototypes "
+                         "of the other K-1 utterances of each speaker in the batch (needs --pk)")
+    ap.add_argument("--dame", action="store_true",
+                    help="Duration-Aware Matryoshka Embedding: per-duration views trained on nested embedding prefixes")
+    ap.add_argument("--dame-durs", default="1,2,6", help="view durations (s); needs --crop-sec >= max")
+    ap.add_argument("--dame-dims", default="48,96,192", help="embedding prefix used for each duration")
+    ap.add_argument("--dame-margins", default="0.0,0.2,0.4", help="AAM margin for each duration")
     ap.add_argument("--resume", action="store_true", help="continue from <out>/resume.pt if present")
     ap.add_argument("--workers", type=int, default=7)
     args = ap.parse_args(argv)
@@ -218,6 +274,11 @@ def main(argv=None):
         log.flush()
 
     items = read_train_list(Path(args.train_list)) if args.train_list else read_train_list()
+    if args.exclude_val:
+        from .valset import train_items_minus_val
+        n0 = len(items)
+        items = train_items_minus_val(items)
+        P(f"exclude-val: {n0} -> {len(items)} utterances")
     spks = sorted({s for s, _ in items})
     spk2id = {s: i for i, s in enumerate(spks)}
     lengths = train_lengths(items)
@@ -240,10 +301,16 @@ def main(argv=None):
         if not ck.exists():  # e.g. cleaned list: slice the cached full-train embeddings of the base model
             full = read_train_list()
             ck_all = cache_key(args.base, "trainall", [r for _, r in full], mode="full")
-            if ck_all.exists():
-                pos = {r: i for i, (_, r) in enumerate(full)}
+            pos = {r: i for i, (_, r) in enumerate(full)}
+            if ck_all.exists() and all(r in pos for _, r in coh_items):
                 ck.parent.mkdir(parents=True, exist_ok=True)
                 np.save(ck, np.load(ck_all)[[pos[r] for _, r in coh_items]])
+            else:  # e.g. list with external data: extract base-model cohort embeddings once (cached)
+                from .embed import extract_cached
+                torch.backends.cudnn.benchmark = False  # variable lengths: autotuning per shape is very slow
+                extract_cached(args.base, lambda: load_model(args.base), "traincohort5",
+                               [r for _, r in coh_items], TRAIN_DIR, mode="full")
+                torch.backends.cudnn.benchmark = True
     if init_state is None and ck.exists():
         cents = speaker_means(np.load(ck), [s for s, _ in coh_items])
         init = torch.from_numpy(cents)
@@ -257,6 +324,18 @@ def main(argv=None):
     if init_state is not None and "head" in init_state and init_state["head"]["weight"].shape == head.weight.shape:
         head.load_state_dict(init_state["head"])
         P("head loaded from init ckpt")
+
+    dame = None
+    if args.dame:  # one sub-center AAM head per (duration, prefix-dim); training-only, not part of inference
+        durs = [float(x) for x in args.dame_durs.split(",")]
+        dims = [int(x) for x in args.dame_dims.split(",")]
+        mars = [float(x) for x in args.dame_margins.split(",")]
+        heads = nn.ModuleList([SubCenterAAM(d, len(spks), k=args.subcenters, margin=m, scale=args.scale,
+                                            init=None if init is None else F.normalize(init[:, :d], dim=-1))
+                               for d, m in zip(dims, mars)]).to(device)
+        dame = list(zip(durs, dims, heads))
+        head = heads[-1]  # full-dim head is the one saved / used for accuracy
+        P("DAME views:", [(d, k, m) for d, k, m in zip(durs, dims, mars)])
 
     frozen = freeze_before(model, args.train_from)
     if frozen:
@@ -277,11 +356,13 @@ def main(argv=None):
                         p_eq=0.3 * args.aug, p_mulaw=0.1 * args.aug) if args.aug > 0 else None
 
     ds = CropDataset(items, spk2id, lengths, args.crop_sec)
-    dl = torch.utils.data.DataLoader(ds, batch_size=args.bs, sampler=EndlessSampler(items, args.spk_balanced, args.seed),
-                                     num_workers=args.workers, drop_last=True, prefetch_factor=4, persistent_workers=True)
+    sampler = PKSampler(items, args.pk, args.seed) if args.pk else EndlessSampler(items, args.spk_balanced, args.seed)
+    dl = torch.utils.data.DataLoader(ds, batch_size=args.bs, sampler=sampler,
+                                     num_workers=args.workers, drop_last=True, prefetch_factor=2, persistent_workers=True)
     opt = torch.optim.AdamW([
         {"params": [p for p in model.parameters() if p.requires_grad], "lr": args.lr},
-        {"params": head.parameters(), "lr": args.head_lr, "weight_decay": 0.0},
+        {"params": (list(nn.ModuleList([h for _, _, h in dame]).parameters()) if dame else list(head.parameters())),
+         "lr": args.head_lr, "weight_decay": 0.0},
     ], weight_decay=args.wd)
     base_lrs = [g["lr"] for g in opt.param_groups]
 
@@ -303,6 +384,9 @@ def main(argv=None):
         r = torch.load(out / "resume.pt", map_location="cpu", weights_only=False)
         model.load_state_dict(r["model"])
         head.load_state_dict(r["head"])
+        if dame and r.get("dame_heads"):
+            for (_, _, h), sd in zip(dame, r["dame_heads"]):
+                h.load_state_dict(sd)
         opt.load_state_dict(r["opt"])
         saved = [Path(x) for x in r["saved"]]
         start = r["step"] + 1
@@ -316,13 +400,28 @@ def main(argv=None):
     for step in range(start, args.steps + 1):
         wav, lab = next(it)
         wav, lab = wav.to(device, non_blocking=True), lab.to(device, non_blocking=True)
-        if args.min_crop_sec:
+        wav_long = None
+        if args.consistency > 0:  # long view 4-6 s + short view 0.8-2.0 s from the same recording window
+            nL = min(int(round(random.uniform(4.0, 6.0) * 4)) * 4000, wav.shape[1])
+            oL = random.randint(0, wav.shape[1] - nL)
+            wav_long = wav[:, oL:oL + nL]
+            nS = int(random.choice([0.8, 1.2, 1.6, 2.0]) * 16000)
+            oS = random.randint(0, wav.shape[1] - nS)
+            wav = wav[:, oS:oS + nS]
+        elif args.crop_dist == "balanced":
+            n = int(round(sample_balanced_len() * 4)) * 4000
+            n = min(max(n, 12000), wav.shape[1])
+            off = random.randint(0, wav.shape[1] - n)
+            wav = wav[:, off:off + n]
+        elif args.min_crop_sec:
             n = int(round(random.uniform(args.min_crop_sec, args.crop_sec) * 4)) * 4000  # 0.25 s grid (few cudnn shapes)
             off = random.randint(0, wav.shape[1] - n)
             wav = wav[:, off:off + n]
         clean = wav
-        if aug is not None:
+        if aug is not None and not dame:
             wav = aug(wav)
+            if wav_long is not None:
+                wav_long = aug(wav_long)
         m = lr_mult(step)
         head_only = step <= args.head_only_steps
         for g, b in zip(opt.param_groups, base_lrs):
@@ -333,9 +432,47 @@ def main(argv=None):
         for name in frozen:
             getattr(model.backbone, name).eval()
         with torch.autocast("cuda", dtype=amp_dtype, enabled=amp_dtype is not None):
-            emb = model(wav).float()
-            loss, acc = head(emb, lab)
             kd = torch.zeros((), device=device)
+            if args.proto > 0:  # supports: the first K-1 of each block; query: last one, short crop
+                K = args.pk
+                qi = torch.arange(K - 1, wav.shape[0], K, device=device)
+                si = torch.tensor([i for i in range(wav.shape[0]) if i % K != K - 1], device=device)
+                nq = min(int(random.choice([1.0, 1.25, 1.5, 1.75, 2.0]) * 16000), clean.shape[1])
+                oq = random.randint(0, clean.shape[1] - nq)
+                q = clean[qi, oq:oq + nq]
+                q = aug(q) if aug is not None else q
+                e_s, e_q = model(wav[si]).float(), model(q).float()
+                l_s, acc = head(e_s, lab[si])
+                l_q, _ = head(e_q, lab[qi])
+                loss = l_s * (K - 1) / K + l_q / K
+                protos = F.normalize(F.normalize(e_s, dim=-1).view(len(qi), K - 1, -1).mean(1), dim=-1)
+                pl = F.cross_entropy(10.0 * F.normalize(e_q, dim=-1) @ protos.T, torch.arange(len(qi), device=device))
+                loss = loss + args.proto * pl
+                kd = kd + pl
+                emb = None
+            elif dame:  # independent random crop + augmentation per duration view; loss on nested prefixes
+                loss = torch.zeros((), device=device)
+                for dur, dim, h in dame:
+                    n = min(int(dur * 16000), clean.shape[1])
+                    o = random.randint(0, clean.shape[1] - n)
+                    v = clean[:, o:o + n]
+                    v = aug(v) if aug is not None else v
+                    l_d, acc = h(model(v).float()[:, :dim], lab)
+                    loss = loss + l_d / len(dame)
+                emb = None
+            else:
+                emb = model(wav).float()
+                loss, acc = head(emb, lab)
+            if wav_long is not None:
+                emb_l = model(wav_long).float()
+                loss_l, _ = head(emb_l, lab)
+                cons = (1 - F.cosine_similarity(emb, emb_l.detach(), dim=-1)).mean()
+                loss = loss + args.cons_mu * loss_l + args.consistency * cons
+                kd = kd + cons
+            if args.supcon > 0:
+                sc = supcon_loss(emb, lab, args.supcon_temp)
+                loss = loss + args.supcon * sc
+                kd = kd + sc
             if teacher is not None:
                 with torch.no_grad():
                     t_emb = teacher(clean if args.teacher_clean else wav).float()
@@ -351,7 +488,7 @@ def main(argv=None):
         opt.zero_grad(set_to_none=True)
         scaler.scale(loss).backward()
         scaler.unscale_(opt)
-        torch.nn.utils.clip_grad_norm_(opt.param_groups[0]["params"] + list(head.parameters()), 5.0)
+        torch.nn.utils.clip_grad_norm_(opt.param_groups[0]["params"] + opt.param_groups[1]["params"], 5.0)
         scaler.step(opt)
         scaler.update()
         run["loss"] += float(loss)
@@ -367,6 +504,7 @@ def main(argv=None):
             torch.save({"base_model": args.base, "model": model.state_dict(), "step": step}, out / f"step{step}.pt")
             saved.append(out / f"step{step}.pt")
             torch.save({"model": model.state_dict(), "head": head.state_dict(), "opt": opt.state_dict(),
+                        "dame_heads": [h.state_dict() for _, _, h in dame] if dame else None,
                         "step": step, "saved": [str(x) for x in saved]}, out / "resume.tmp")
             (out / "resume.tmp").replace(out / "resume.pt")
         if step % args.eval_every == 0 or step == args.steps:

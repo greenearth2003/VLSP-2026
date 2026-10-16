@@ -1,0 +1,52 @@
+{"sys": "W01_wise_F03_M_avg", "backend": "cos", "split": "dev", "eer": 5.081, "mindcf": 0.2775, "d0-2": 11.29, "d2-4": 4.67, "d4-8": 2.07, "d8-inf": 0.64}
+{"sys": "W01_wise_F03_M_avg", "backend": "qmf", "split": "dev", "eer": 4.55, "mindcf": 0.2884, "d0-2": 11.16, "d2-4": 4.67, "d4-8": 2.07, "d8-inf": 0.64}
+{"sys": "W01_wise_F03_M_avg+sdur", "backend": "cos", "split": "dev", "eer": 5.081, "mindcf": 0.2775, "d0-2": 11.29, "d2-4": 4.67, "d4-8": 2.07, "d8-inf": 0.64}
+{"sys": "W01_wise_F03_M_avg+sdur", "backend": "qmf", "split": "dev", "eer": 4.602, "mindcf": 0.3361, "d0-2": 11.13, "d2-4": 4.68, "d4-8": 2.23, "d8-inf": 0.64}
+{"sys": "W01_wise_F03_M_avg+hn", "backend": "cos", "split": "dev", "eer": 5.081, "mindcf": 0.2775, "d0-2": 11.29, "d2-4": 4.67, "d4-8": 2.07, "d8-inf": 0.64}
+{"sys": "W01_wise_F03_M_avg+hn", "backend": "qmf", "split": "dev", "eer": 4.508, "mindcf": 0.3147, "d0-2": 11.18, "d2-4": 4.6, "d4-8": 2.14, "d8-inf": 0.64}
+{"sys": "W01_wise_F03_M_avg+hn+sdur", "backend": "cos", "split": "dev", "eer": 5.081, "mindcf": 0.2775, "d0-2": 11.29, "d2-4": 4.67, "d4-8": 2.07, "d8-inf": 0.64}
+{"sys": "W01_wise_F03_M_avg+hn+sdur", "backend": "qmf", "split": "dev", "eer": 4.576, "mindcf": 0.3651, "d0-2": 11.26, "d2-4": 4.67, "d4-8": 2.19, "d8-inf": 0.64}
+{"cmp": "W01_wise_F03_M_avg+sdur vs W01_wise_F03_M_avg", "backend": "cos", "split": "dev", "diff": 0.0, "ci": [0.0, 0.0], "p_better": 0.0}
+{"cmp": "W01_wise_F03_M_avg+sdur vs W01_wise_F03_M_avg", "backend": "qmf", "split": "dev", "diff": 0.052, "ci": [-0.112, 0.208], "p_better": 0.277}
+{"cmp": "W01_wise_F03_M_avg+hn vs W01_wise_F03_M_avg", "backend": "cos", "split": "dev", "diff": 0.0, "ci": [0.0, 0.0], "p_better": 0.0}
+{"cmp": "W01_wise_F03_M_avg+hn vs W01_wise_F03_M_avg", "backend": "qmf", "split": "dev", "diff": -0.042, "ci": [-0.209, 0.085], "p_better": 0.803}
+{"cmp": "W01_wise_F03_M_avg+hn+sdur vs W01_wise_F03_M_avg", "backend": "cos", "split": "dev", "diff": 0.0, "ci": [0.0, 0.0], "p_better": 0.0}
+{"cmp": "W01_wise_F03_M_avg+hn+sdur vs W01_wise_F03_M_avg", "backend": "qmf", "split": "dev", "diff": 0.026, "ci": [-0.185, 0.188], "p_better": 0.447}
+{"sys": "W01_wise_F03_M_avg", "backend": "cos", "split": "dev", "eer": 5.081, "mindcf": 0.2775, "d0-2": 11.29, "d2-4": 4.67, "d4-8": 2.07, "d8-inf": 0.64}
+{"sys": "W01_wise_F03_M_avg", "backend": "qmf", "split": "dev", "eer": 4.55, "mindcf": 0.2884, "d0-2": 11.16, "d2-4": 4.67, "d4-8": 2.07, "d8-inf": 0.64}
+{"sys": "SOUP6_avg", "backend": "cos", "split": "dev", "eer": 5.118, "mindcf": 0.2793, "d0-2": 11.36, "d2-4": 4.67, "d4-8": 2.08, "d8-inf": 0.64}
+{"sys": "SOUP6_avg", "backend": "qmf", "split": "dev", "eer": 4.616, "mindcf": 0.2953, "d0-2": 11.18, "d2-4": 4.71, "d4-8": 2.04, "d8-inf": 0.54}
+{"cmp": "SOUP6_avg vs W01_wise_F03_M_avg", "backend": "cos", "split": "dev", "diff": 0.037, "ci": [-0.058, 0.126], "p_better": 0.203}
+{"cmp": "SOUP6_avg vs W01_wise_F03_M_avg", "backend": "qmf", "split": "dev", "diff": 0.066, "ci": [-0.044, 0.128], "p_better": 0.2}
+{"val": "v4", "clean": true, "sys": "W_S00_base_avg", "backend": "cos", "eer": 5.135, "mindcf": 0.2, "SS": 6.49, "SL": 4.61, "LL": 3.55}
+{"val": "v4", "clean": true, "sys": "W_S00_base_avg", "backend": "qmf", "eer": 4.628, "mindcf": 0.1961, "SS": 6.47, "SL": 4.52, "LL": 2.85}
+{"val": "v4", "clean": true, "sys": "redimnet_M_mix", "backend": "cos", "eer": 6.012, "mindcf": 0.2378, "SS": 7.38, "SL": 5.51, "LL": 4.14}
+{"val": "v4", "clean": true, "sys": "redimnet_M_mix", "backend": "qmf", "eer": 5.349, "mindcf": 0.2317, "SS": 7.29, "SL": 5.59, "LL": 3.24}
+{"val": "v4", "clean": true, "sys": "W_S01_balanced_avg", "backend": "cos", "eer": 5.051, "mindcf": 0.1901, "SS": 6.21, "SL": 4.65, "LL": 3.5}
+{"val": "v4", "clean": true, "sys": "W_S01_balanced_avg", "backend": "qmf", "eer": 4.595, "mindcf": 0.1921, "SS": 6.23, "SL": 4.53, "LL": 2.86}
+{"val": "v4", "clean": true, "sys": "W_S02_consistency_avg", "backend": "cos", "eer": 5.014, "mindcf": 0.1857, "SS": 6.29, "SL": 4.55, "LL": 3.47}
+{"val": "v4", "clean": true, "sys": "W_S02_consistency_avg", "backend": "qmf", "eer": 4.514, "mindcf": 0.1859, "SS": 6.29, "SL": 4.55, "LL": 2.84}
+{"val": "v4", "clean": true, "sys": "W_S03_bal_pk_supcon_avg", "backend": "cos", "eer": 5.257, "mindcf": 0.1995, "SS": 6.66, "SL": 4.81, "LL": 3.77}
+{"val": "v4", "clean": true, "sys": "W_S03_bal_pk_supcon_avg", "backend": "qmf", "eer": 4.78, "mindcf": 0.1968, "SS": 6.63, "SL": 4.61, "LL": 3.0}
+{"val": "v4", "clean": true, "sys": "W_S04_dropbad_avg", "backend": "cos", "eer": 5.191, "mindcf": 0.1968, "SS": 6.45, "SL": 4.69, "LL": 3.5}
+{"val": "v4", "clean": true, "sys": "W_S04_dropbad_avg", "backend": "qmf", "eer": 4.541, "mindcf": 0.192, "SS": 6.33, "SL": 4.55, "LL": 3.04}
+{"val": "v4", "clean": true, "sys": "W_S00_base_avg+mc", "backend": "cos", "eer": 5.158, "mindcf": 0.2004, "SS": 6.49, "SL": 4.69, "LL": 3.62}
+{"val": "v4", "clean": true, "sys": "W_S00_base_avg+mc", "backend": "qmf", "eer": 4.602, "mindcf": 0.1945, "SS": 6.47, "SL": 4.63, "LL": 2.92}
+{"val": "v4", "clean": true, "cmp": "redimnet_M_mix vs W_S00_base_avg", "backend": "cos", "diff": 0.876, "ci": [0.641, 1.083], "p_better": 0.0}
+{"val": "v4", "clean": true, "cmp": "redimnet_M_mix vs W_S00_base_avg", "backend": "qmf", "diff": 0.722, "ci": [0.602, 1.003], "p_better": 0.0}
+{"val": "v4", "clean": true, "cmp": "W_S01_balanced_avg vs W_S00_base_avg", "backend": "cos", "diff": -0.084, "ci": [-0.173, 0.059], "p_better": 0.88}
+{"val": "v4", "clean": true, "cmp": "W_S01_balanced_avg vs W_S00_base_avg", "backend": "qmf", "diff": -0.033, "ci": [-0.099, 0.123], "p_better": 0.417}
+{"val": "v4", "clean": true, "cmp": "W_S02_consistency_avg vs W_S00_base_avg", "backend": "cos", "diff": -0.122, "ci": [-0.246, -0.026], "p_better": 0.993}
+{"val": "v4", "clean": true, "cmp": "W_S02_consistency_avg vs W_S00_base_avg", "backend": "qmf", "diff": -0.114, "ci": [-0.186, 0.056], "p_better": 0.847}
+{"val": "v4", "clean": true, "cmp": "W_S03_bal_pk_supcon_avg vs W_S00_base_avg", "backend": "cos", "diff": 0.121, "ci": [-0.016, 0.307], "p_better": 0.033}
+{"val": "v4", "clean": true, "cmp": "W_S03_bal_pk_supcon_avg vs W_S00_base_avg", "backend": "qmf", "diff": 0.152, "ci": [0.025, 0.3], "p_better": 0.007}
+{"val": "v4", "clean": true, "cmp": "W_S04_dropbad_avg vs W_S00_base_avg", "backend": "cos", "diff": 0.055, "ci": [-0.051, 0.129], "p_better": 0.217}
+{"val": "v4", "clean": true, "cmp": "W_S04_dropbad_avg vs W_S00_base_avg", "backend": "qmf", "diff": -0.087, "ci": [-0.174, 0.103], "p_better": 0.623}
+{"val": "v4", "clean": true, "cmp": "W_S00_base_avg+mc vs W_S00_base_avg", "backend": "cos", "diff": 0.022, "ci": [-0.127, 0.113], "p_better": 0.493}
+{"val": "v4", "clean": true, "cmp": "W_S00_base_avg+mc vs W_S00_base_avg", "backend": "qmf", "diff": -0.026, "ci": [-0.103, 0.093], "p_better": 0.44}
+{"val": "v4", "clean": true, "sys": "W_S01_balanced_avg", "backend": "cos", "eer": 5.051, "mindcf": 0.1901, "SS": 6.21, "SL": 4.65, "LL": 3.5}
+{"val": "v4", "clean": true, "sys": "W_S01_balanced_avg", "backend": "qmf", "eer": 4.595, "mindcf": 0.1921, "SS": 6.23, "SL": 4.53, "LL": 2.86}
+{"val": "v4", "clean": true, "sys": "W_S03_bal_pk_supcon_avg", "backend": "cos", "eer": 5.257, "mindcf": 0.1995, "SS": 6.66, "SL": 4.81, "LL": 3.77}
+{"val": "v4", "clean": true, "sys": "W_S03_bal_pk_supcon_avg", "backend": "qmf", "eer": 4.78, "mindcf": 0.1968, "SS": 6.63, "SL": 4.61, "LL": 3.0}
+{"val": "v4", "clean": true, "cmp": "W_S03_bal_pk_supcon_avg vs W_S01_balanced_avg", "backend": "cos", "diff": 0.205, "ci": [0.07, 0.334], "p_better": 0.0}
+{"val": "v4", "clean": true, "cmp": "W_S03_bal_pk_supcon_avg vs W_S01_balanced_avg", "backend": "qmf", "diff": 0.185, "ci": [0.014, 0.295], "p_better": 0.01}

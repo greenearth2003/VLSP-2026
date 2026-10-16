@@ -1,0 +1,12 @@
+{
+ "version": "version_161026",
+ "system": "S04qs",
+ "description": "S04 (ReDimNet-M, F03 recipe on lists/train_drop_bad.txt minus V speakers, step 2000 + WiSE 0.5) + QS calibration (QMF(dur) fitted on train cohort full + 1.5 s crops)",
+ "params_M": 4.812,
+ "report": "docs/version_161026_S04qs_report.md",
+ "public_test": {"eer_all_trials": 4.784, "mindcf_all": 0.2979, "pdev_clean_eer": 4.047, "pdev_clean_mindcf": 0.2804},
+ "md5": {"sred_S04qs_redimnetM_161026.pt": "1303a0e772640a0380d750df898e2408",
+         "sred_S04qs_public_161026.txt": "adb8455571998a1287b8ffe0dd7f25d3",
+         "sred_S04qs_public_161026.zip": "042e9e5a2fb4a5472d402a3a214badc2"},
+ "private_command": "python scripts/make_submission_qs.py <trials> <audio_dir> private <out>/results.txt releases/version_161026_S04qs/sred_S04qs_redimnetM_161026.pt"
+}

@@ -156,3 +156,91 @@ Results v3 (P-dev, QMF; vs W01):
 - **E1 VAD** −0.06 [−0.25, +0.08], P=0.81 (cosine −0.12, P=0.86) → not accepted (small, consistent-sign gain).
 - **E5 F0-QMF** +0.01 [−0.04, +0.03], P=0.56 → rejected (embedding already encodes gender).
 - E1+E5 −0.05, P=0.83 → not accepted.
+- (v3) R0 re-run of the W01 recipe: P-dev qmf 4.70 vs W01 4.55 (+0.15 [−0.07, +0.24]) = re-training noise +
+  W01's original public-based checkpoint pick. Training changes are judged against R0.
+
+- **v3 training results** (P-dev qmf, vs R0 4.70 / minDCF 0.306): E2 clean 4.67 (−0.03, P=0.71, minDCF 0.326);
+  E3a no-aug 4.58 (−0.11, P=0.69, minDCF **0.274**); E3b matched-aug 4.63 (−0.07, P=0.68, minDCF 0.277);
+  E4 short+spk-balanced 4.60 (−0.10, P=0.72, minDCF 0.280). **None accepted.** All point the same way (small
+  gains, better minDCF when the heavy synthetic augmentation is removed/softened), none above re-training noise.
+
+## Round v4 (2026-10-15) — short-duration training, judged on a NEW train-held-out validation set
+
+Motivation: an external plan (short-duration focus); P-dev is over-used, so decisions move to **V** =
+300 train speakers held out (`sred/valset.py`, `lists/val_v4.json`): 4,374 files, 16,306 trials in SS / SL / LL
+(S = first 1.5 s), 60 % same-gender non-targets, distant-index targets first. Runs use `--exclude-val`
+(46,772 utts left). Public P-dev is only a final sign-check. No W01 teacher (it saw V speakers): consistency
+uses the student's own long view (stop-grad).
+
+QMF 2.0 checked first on P-dev with W01 (inference-only): Q01 +speech-duration +0.05 (P=0.28, minDCF worse);
+Q02 +hard negatives −0.04 (P=0.80, minDCF 0.315 vs 0.288) → both rejected.
+
+| ID | recipe (all: F03 hparams, 3000 steps, step-2000 + WiSE 0.5, --exclude-val) | vs |
+|---|---|---|
+| Z00 | zero-shot ReDimNet-M (anchor) | – |
+| S00 | baseline recipe | – |
+| S01 | `--crop-sec 6 --crop-dist balanced` (0.8–1.5 30 %, 1.5–2 25 %, 2–3 25 %, 3–6 20 %) | S00 |
+| S02 | `--crop-sec 6 --consistency 0.1 --cons-mu 0.5` (short 0.8–2 s + long 4–6 s views) | S00 |
+| S03 | S01 + `--pk 4 --supcon 0.1` (8 spk × 4 utt) | S01 |
+| I01 | S00 with full+multi-crop embeddings (`::mc`) | S00 |
+| W02 | WiSE α ∈ {0.25, 0.4, 0.6, 0.75} for the best of S00–S03 | α = 0.5 |
+
+Rule: P(better) > 0.95 on V (QMF). Final = winning recipe + α **retrained on the full train**, sign-checked on
+P-dev against W01; if nothing wins, W01 stays.
+
+### Final selection rule (pre-registered 2026-10-15, before any v4 result)
+`scripts/finalize_v4.py`: recipe = best of S01–S03 beating S00 on V (QMF, P > 0.95); data = S04
+(`lists/train_drop_bad.txt`: −56 mixed-voice IDs, −371 suspicious, −51 cross-ID duplicates) if it beats S00
+(P > 0.95). Winner retrained on the FULL train (`scripts/pipeline_final.sh`), step 2000 + WiSE 0.5, released only
+if not worse than W01 on P-dev; otherwise W01 stays. Error analysis: W01 public EER without mixed-voice target
+trials = 3.73 % (vs 4.85 %); FN are the severe errors (29 % with score < −3, 61 % of those from mixed-voice IDs),
+FP are mild and 86 % same-gender.
+- **SOUP6** (2026-10-15, inference-only, decided before evaluation): uniform weight average of all six full-train
+  fine-tuned models (W01, R0, E2, E3a, E3b, E4; no member selection). Released if not worse than W01 on P-dev.
+
+### Clean evaluation (2026-10-15, user request)
+From now on P-dev and V exclude trials touching label-noise IDs found in the EDA (public: 42 mixed-voice IDs +
+same-voice ID pairs; V: 15 mixed-voice train IDs). Clean P-dev = 19,569 trials / 217 spk; clean V = 15,105 trials.
+Clean P-dev (qmf EER / minDCF): zero-shot M 4.54/.347 · W01 **4.09**/.274 · F03 4.05/.268 · R0 4.21/.292 ·
+E2 4.23/.315 · E3a 4.15/**.256** · E3b 4.13/.260 · E4 4.08/.263. W01 vs zero-shot −0.46 (P=0.99); all v3 runs
+within ±0.15 of W01 (not significant).
+- **v4 results (clean V, QMF EER / minDCF; SS/SL/LL)**: Z00 zero-shot 5.35/.232 (7.29/5.59/3.24) · S00 4.63/.196
+  (6.47/4.52/2.85) · S01 balanced 4.59/.192 (6.23/4.53/2.86) · **S02 consistency 4.51/.186** (6.29/4.55/2.84) ·
+  S03 PK+SupCon 4.78/.197 (worse, P(better)=0.007) · S04 drop-bad 4.54/.192 · S00+multi-crop 4.60.
+  vs S00: S01 −0.03 (P=0.42), S02 −0.11 [−0.19, +0.06] (P=0.85), S04 −0.09 (P=0.62), S03 +0.15 (significantly
+  worse). Fine-tuning vs zero-shot −0.72 (P=1.0) → V is sensitive. **Decision: NONE → W01 stays** (finalize_v4.py).
+
+## External data (2026-10-15, user-approved): Vietnam-Celeb (HF doof-ferb/Vietnam-Celeb, ~1,000 spk, 187 h)
+Leak audit on a 20-speaker sample: no VC file within cos 0.90 of any VLSP file, no identical PCM; VC→VLSP
+nearest-speaker centroid cos 0.41–0.71 (≈ VLSP nearest-other-speaker p50 0.57) → independent source.
+`ext/vc_prepare.py` (full audit, 10 utt/spk): drop VC speakers with centroid cos ≥ 0.80 to any VLSP train/public
+speaker, drop mixed-voice VC speakers → `lists/train_vlsp_vc.txt` (= train_drop_bad + VC).
+**D1** = S02 recipe on that list, 3000 steps, step 2000 + WiSE 0.5; judged on clean P-dev vs W01
+(V cannot be used: D1 trains on V speakers).
+- **D1vc** (S02 recipe + VC, 3000 steps, step 2000 + WiSE): public 4.94, clean P-dev 4.16 (vs W01 +0.07, P=0.24),
+  minDCF 0.339 → not better. Full-train releases: S02full public 4.86 / clean 4.11; S04full 4.82 / 4.12;
+  S04 (no-V) 4.82 / 4.09 — all within noise of W01 (4.85 / 4.09).
+- **D2a** = S04 recipe + VC, 6000 steps, step 6000 + WiSE 0.5; **D2b** = D2a + duration-balanced crops.
+- **D2a** (S04 recipe + VC, 6000 steps): public 4.94, clean P-dev 4.24 (+0.15 vs W01), minDCF .329 → worse.
+  Vietnam-Celeb hurts twice (D1, D2a): domain mismatch (celebrity YouTube vs VLSP), not under-training.
+- **QS calibration** (QMF fitted on train cohort full + 1.5 s crops, same-file pairs excluded; `::qs`):
+  clean P-dev W01 4.09 → 4.04, S04 4.09 → 4.05 (both −0.04/−0.05, P≈0.4–0.6, minDCF also better); <2 s bucket
+  unchanged — gain comes from better cross-duration score alignment. **S04 + QS: public 4.78** (best so far).
+  Release `releases/version_161026_S04qs/`; private: `scripts/make_submission_qs.py <trials> <audio> private <out>`.
+- **D2b** (D2a + duration-balanced crops): public 4.91, clean P-dev 4.31 (+0.22 vs W01; vs D2a +0.07), minDCF .329;
+  <2 s bucket 10.74 (no gain). Not better. Final submission stays **S04 + QS** (public 4.78).
+
+**RULE (user, 2026-10-16): only the organisers' data may be used.** Vietnam-Celeb runs (D1vc, D2a, D2b) are
+INVALID for submission (they were also worse). Final submission S04+QS uses BTC data only.
+
+## Round C (2026-10-16) — short-utterance proposals, BTC data only, judged on clean V vs S04
+Diagnosis first: on clean P-dev the "<2 s = 10.66 %" bucket is dominated by ONE speaker (id03289, ~72 % of P-dev
+targets): without it <2 s EER = 5.01 %, overall 2.92 %. Public is therefore a poor guide for short-utterance work;
+decisions use clean V (SS/SL/LL buckets). Baseline C00 = S04 (W_S04_dropbad, trained without V).
+| ID | change vs S04 recipe | notes |
+|---|---|---|
+| C01 | DAME-FT hard: views 1/2/6 s → prefixes 48/96/192, AAM margins 0.0/0.2/0.4, `--crop-sec 6 --dame` | views are crops of the same recording (paper uses different utterances) |
+| C06 | `lists/train_keepdom.txt`: mixed-voice IDs keep the dominant cluster (≥60 %) instead of dropping | 56,731 utts / 1,885 spk |
+| C03 | `--pk 4 --proto 0.1`: query (1–2 s crop) vs prototype of 3 supports + AAM | S03 (PK+SupCon) was significantly worse → low prior |
+Rule: P(better) > 0.95 on clean V (QMF). Skipped with reasons: uncertainty/quality QMF features (Q01/norm features
+already hurt), phonetic scoring (needs ASR model; parameter/rule risk).

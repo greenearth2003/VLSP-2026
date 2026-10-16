@@ -1,0 +1,12 @@
+{
+ "version": "version_151026",
+ "system": "E4",
+ "description": "F03 recipe on full train, crop 1.0-2.5 s + speaker-balanced sampling, fixed schedule (no public-based checkpoint selection), step 2000 + WiSE 0.5 with pretrained ReDimNet-M",
+ "backend": "qmf_dur",
+ "params_M": 4.812,
+ "source": "exp/ft/W_E4_short_spkbal/avg.pt",
+ "public_test": {"eer_all_trials": 4.867, "pdev_clean_eer": 4.08, "pdev_clean_mindcf": 0.263},
+ "md5": {"sred_E4_public_151026.txt": "3a879928c69c4a51960504a28f61eed1",
+"sred_E4_public_151026.zip": "925391e2648e50faf92c023a854bb039",
+"sred_E4_redimnetM_151026.pt": "80c3d1477c98965dc5d9515f73963ce6"}
+}

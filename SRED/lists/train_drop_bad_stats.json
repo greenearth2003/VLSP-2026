@@ -1,0 +1,9 @@
+{
+ "mixed_voice_ids": 56,
+ "utts_mixed": 2708,
+ "utts_suspicious": 371,
+ "utts_crossid_dup": 51,
+ "n_in": 58404,
+ "n_out": 55274,
+ "spk_out": 1842
+}

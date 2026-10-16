@@ -104,13 +104,13 @@ def extract_batched(model, files: list[str], root: Path, device: str = "cuda", n
     return embs
 
 
-def extract(model, files: list[str], root: Path, device: str = "cuda", num_workers: int = 6,
+def extract(model, files: list[str], root: Path, device: str = "cuda", num_workers: int = 3,
             **kw) -> np.ndarray:
     if kw.pop("batched", False):
         return extract_batched(model, files, root, device, num_workers)
     model = model.to(device).eval()
     ds = WavDataset(files, root, vad=kw.pop("vad", False))
-    dl = torch.utils.data.DataLoader(ds, batch_size=None, num_workers=num_workers, prefetch_factor=8)
+    dl = torch.utils.data.DataLoader(ds, batch_size=None, num_workers=num_workers, prefetch_factor=2)
     embs = [None] * len(files)
     for i, wav in tqdm(dl, total=len(ds), mininterval=30, desc="embed"):
         embs[i] = embed_wav(model, wav.to(device), **kw).float().cpu().numpy()

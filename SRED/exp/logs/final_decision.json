@@ -1,0 +1,65 @@
+{
+ "v_eer_qmf": {
+  "W_S00_base_avg": 4.628,
+  "redimnet_M_mix": 5.349,
+  "W_S01_balanced_avg": 4.595,
+  "W_S02_consistency_avg": 4.514,
+  "W_S03_bal_pk_supcon_avg": 4.78,
+  "W_S04_dropbad_avg": 4.541,
+  "W_S00_base_avg+mc": 4.602
+ },
+ "comparisons_vs_S00": {
+  "S01_balanced": {
+   "val": "v4",
+   "clean": true,
+   "cmp": "W_S01_balanced_avg vs W_S00_base_avg",
+   "backend": "qmf",
+   "diff": -0.033,
+   "ci": [
+    -0.099,
+    0.123
+   ],
+   "p_better": 0.417
+  },
+  "S02_consistency": {
+   "val": "v4",
+   "clean": true,
+   "cmp": "W_S02_consistency_avg vs W_S00_base_avg",
+   "backend": "qmf",
+   "diff": -0.114,
+   "ci": [
+    -0.186,
+    0.056
+   ],
+   "p_better": 0.847
+  },
+  "S03_bal_pk_supcon": {
+   "val": "v4",
+   "clean": true,
+   "cmp": "W_S03_bal_pk_supcon_avg vs W_S00_base_avg",
+   "backend": "qmf",
+   "diff": 0.152,
+   "ci": [
+    0.025,
+    0.3
+   ],
+   "p_better": 0.007
+  },
+  "S04_dropbad": {
+   "val": "v4",
+   "clean": true,
+   "cmp": "W_S04_dropbad_avg vs W_S00_base_avg",
+   "backend": "qmf",
+   "diff": -0.087,
+   "ci": [
+    -0.174,
+    0.103
+   ],
+   "p_better": 0.623
+  }
+ },
+ "passing": [],
+ "chosen_recipe": null,
+ "chosen_data": [],
+ "train_args": null
+}

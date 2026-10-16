@@ -65,7 +65,7 @@ def _info(path):
     return len(vad_trim(x)) / SR, file_f0(x)
 
 
-def file_info_cached(files: list[str], root, tag: str, workers: int = 6):
+def file_info_cached(files: list[str], root, tag: str, workers: int = 3):
     """(VAD speech duration in s, F0 in Hz) per file, cached in lists/<tag>_vadf0.npy."""
     import hashlib
     from multiprocessing import Pool

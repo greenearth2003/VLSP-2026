@@ -36,8 +36,21 @@ def _half(spk: str) -> int:
     return int(hashlib.md5(spk.encode()).hexdigest(), 16) % 2
 
 
+def label_noise_sets():
+    """Public IDs flagged in the EDA (evaluation-only): mixed-voice IDs and ID pairs that are the same voice."""
+    import pandas as pd
+    out = ROOT / "eda/out"
+    b = pd.read_csv(out / "public_spk_bimodality.csv")
+    mixed = set(b[(b.cos_between_2clusters < 0.5) & (b.minor_frac >= 0.15)].spk)
+    d = pd.read_csv(out / "duplicate_identities.csv")
+    d = d[d.kind == "public-public"]
+    same = {(a, c) for a, c in zip(d.spk1, d.spk2)} | {(c, a) for a, c in zip(d.spk1, d.spk2)}
+    return mixed, same
+
+
 class Protocol:
-    def __init__(self, cohort_per_spk: int = 5):
+    def __init__(self, cohort_per_spk: int = 5, clean: bool = True):
+        self.clean = clean
         self.pairs, self.labels = read_trials()
         self.files = unique_files(self.pairs)
         pos = {f: i for i, f in enumerate(self.files)}
@@ -48,6 +61,11 @@ class Protocol:
         ha = np.array([_half(_spk(a)) for a, _ in self.pairs])
         hb = np.array([_half(_spk(b)) for _, b in self.pairs])
         self.mask = {"dev": (ha == 0) & (hb == 0), "hold": (ha == 1) & (hb == 1)}
+        if clean:  # drop trials touching label-noise IDs (EDA): mixed-voice IDs, same-voice ID pairs
+            mixed, same = label_noise_sets()
+            ok = np.array([_spk(a) not in mixed and _spk(b) not in mixed and (_spk(a), _spk(b)) not in same
+                           for a, b in self.pairs])
+            self.mask = {k: m & ok for k, m in self.mask.items()}
         g = np.array([_spk(a) for a, _ in self.pairs])
         self.groups = {}
         for split, m in self.mask.items():
@@ -71,15 +89,25 @@ class Protocol:
         e = l2n(np.load(cache_key(model, "public", self.files, **kw)))
         c = l2n(np.load(cache_key(model, "traincohort5", self.coh_rels, **kw)))
         cos = np.sum(e[self.ia] * e[self.ib], 1)
-        dur, coh_dur, f0p, f0c = self.dur, self.coh_dur, None, None
-        if opts:
+        dur, coh_dur, f0p, f0c, sdp, sdc = self.dur, self.coh_dur, None, None, None, None
+        coh_spk, fid = self.coh_spk, None
+        if "qs" in opts:  # QMF fitted on full + 1.5 s crops of the train cohort (short-duration calibration)
+            cs = l2n(np.load(cache_key(model, "traincohort5", self.coh_rels, mode="full", max_sec=1.5)))
+            c = np.r_[c, cs]
+            coh_dur = np.r_[coh_dur, np.minimum(coh_dur, 1.5)]
+            coh_spk = list(self.coh_spk) * 2
+            fid = np.r_[np.arange(len(self.coh_rels)), np.arange(len(self.coh_rels))]
+        if opts - {"hn", "qs"}:
             ip = file_info_cached(self.files, PUBLIC_DIR, "public")
             ic = file_info_cached(self.coh_rels, TRAIN_DIR, "traincohort5")
             if "vad" in opts:
                 dur, coh_dur = ip[:, 0], ic[:, 0]
             if "f0" in opts:
                 f0p, f0c = ip[:, 1], ic[:, 1]
-        qmf = QMF(use_asnorm=False).fit(c, self.coh_spk, coh_dur, f0=f0c).score(e, dur, self.ia, self.ib, f0=f0p)
+            if "sdur" in opts:
+                sdp, sdc = np.maximum(ip[:, 0], 0.1), np.maximum(ic[:, 0], 0.1)
+        qmf = QMF(use_asnorm=False).fit(c, coh_spk, coh_dur, f0=f0c, sdur=sdc, hard_neg="hn" in opts, fid=fid) \
+            .score(e, dur, self.ia, self.ib, f0=f0p, sdur=sdp)
         return {"cos": cos, "qmf": qmf}
 
     def eer(self, s, split, idx=None):
@@ -111,7 +139,7 @@ class Protocol:
 
 def parse_spec(spec: str) -> tuple[str, set]:
     model, *opts = spec.split("::")
-    assert set(opts) <= {"vad", "f0"}, opts
+    assert set(opts) <= {"vad", "f0", "sdur", "hn", "qs"}, opts
     return model, set(opts)
 
 
@@ -130,6 +158,8 @@ def extract_system(spec: str, P: "Protocol") -> None:
     fn = lambda: load_model(model)  # noqa: E731
     extract_cached(model, fn, "public", P.files, PUBLIC_DIR, **kw)
     extract_cached(model, fn, "traincohort5", P.coh_rels, TRAIN_DIR, **kw)
+    if "qs" in opts:
+        extract_cached(model, fn, "traincohort5", P.coh_rels, TRAIN_DIR, mode="full", max_sec=1.5)
 
 
 def main(argv=None):
@@ -139,8 +169,9 @@ def main(argv=None):
     ap.add_argument("--n-boot", type=int, default=300)
     ap.add_argument("--extract", action="store_true", help="extract (cached) embeddings first")
     ap.add_argument("--out", default=None, help="append JSON lines here")
+    ap.add_argument("--noisy", action="store_true", help="keep trials of label-noise IDs (old behaviour)")
     args = ap.parse_args(argv)
-    P = Protocol()
+    P = Protocol(clean=not args.noisy)
     if args.extract:
         for sp in args.systems:
             extract_system(sp, P)
@@ -153,13 +184,13 @@ def main(argv=None):
     for name, sc in S.items():
         for b, s in sc.items():
             for sp in splits:
-                lines.append({"sys": name, "backend": b, "split": sp, **P.report(s, sp)})
+                lines.append({"sys": name, "backend": b, "split": sp, "clean": P.clean, **P.report(s, sp)})
     for name, sc in S.items():
         if name == ref:
             continue
         for b in sc:
             for sp in splits:
-                lines.append({"cmp": f"{name} vs {ref}", "backend": b, "split": sp,
+                lines.append({"cmp": f"{name} vs {ref}", "backend": b, "split": sp, "clean": P.clean,
                               **P.paired(S[ref][b], sc[b], sp, n=args.n_boot)})
     for ln in lines:
         print(json.dumps(ln))
