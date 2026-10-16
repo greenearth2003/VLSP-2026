@@ -18,6 +18,8 @@ SRED/exp/ft/
 SRED/exp/emb/
 # submission score files (~2 MB each, regenerate with scripts/make_submission.sh)
 SRED/submissions/
+# raw dataset (zips + unzipped audio, ~35 GB; from gs://cake-ds-intern/VLSP-2026/SRED/Dataset/)
+SRED/data/
 
 # model weights anywhere
 *.pt
@@ -31,3 +33,15 @@ SRED/submissions/
 *.log.tmp
 nohup.out
 .DS_Store
+
+# --- analysis outputs that are large / regenerable (scripts/data_features.py, error_analysis.py) ---
+SRED/exp/analysis/features_*.csv
+SRED/exp/analysis/trial_errors.csv
+SRED/exp/analysis/public_trials_annot.csv
+SRED/exp/analysis/scores/
+# listening pages embed competition audio; explainer video is a large binary (share separately)
+SRED/exp/analysis/listen/
+# per-split duration caches written by sred.evaluate (the original public ones stay tracked)
+SRED/lists/*_durations.npy
+# local submission dry-runs
+SRED/submissions/

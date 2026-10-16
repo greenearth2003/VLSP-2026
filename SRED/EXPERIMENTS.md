@@ -130,3 +130,144 @@ Gains replicate in sign on P-hold but shrink (−0.47 → −0.17 for W01): the 
 Honest expectation for private: ~0.2–0.5 EER better than zero-shot M + QMF, minDCF clearly better.
 Submission: `submissions/W01_qmf_public.txt` (4.81M params). Private command:
 `scripts/make_submission.sh <trials> <audio_dir> private <out> exp/ft/W01_wise_F03_M/avg.pt qmf_dur`.
+
+---
+
+# Milestone M1 (2026-10-14 → 10-16, branch `thucth`) — data cleaning, failure analysis, distillation
+
+New machine (L40S 46 GB, dedicated): data in `SRED/data/Vi-SRED26` (unzipped from
+`gs://cake-ds-intern/VLSP-2026/SRED/Dataset/`, zip MD5/CRC32C verified against the bucket, zips deleted),
+paths in `env.sh` are now relative to the repo. Pretrained weights re-downloaded from the **official**
+GitHub releases (IDRnD/ReDimNet `latest`, PalabraAI/redimnet2 `v1.0.0`) + HF `Wespeaker/...-resnet34-LM`;
+they reproduce the earlier HF/MLX/GGUF copies (M cos 5.873 vs 5.87, B6 5.691 vs 5.693).
+
+Final system of this milestone: **K21_M** (`exp/ft/W_K21_M/avg.pt`, 4.81M) — public **EER 4.50 % full /
+2.92 % cleaned** (from 4.85 / 3.28). Submitted 2026-10-16 as `result-1016.zip` (format: `results.txt`,
+`file1 file2 score`). Private test: `scripts/make_final_submission.sh` (see end of this section).
+
+## Evaluation sets used from here on
+
+All are subsets of the organisers' `public-test.txt` (49,993 trials); labels are never modified.
+
+| set | trials | built by |
+|---|---|---|
+| full public | 49,993 | as given (≈ leaderboard) |
+| **cleaned public** | 47,932 | `lists/clean/public_trials_clean.txt`: drops 2,061 trials touching a flagged file (no speech, wrong-speaker file, minority voice of a mixed folder) or a non-target pair that is the same person |
+| **P-dev** / **P-hold** | 13,489 / 22,776 | cleaned trials, md5 speaker halves on **merged identities** (`lists/clean/public_identity.json`); cross-half trials (11,667) dropped |
+
+(The Protocol-v2 split above hashed raw folder IDs on uncleaned trials; numbers are not comparable.)
+Acceptance rule unchanged: paired speaker bootstrap (300×) on P-dev, accept if P(better) > 0.95.
+Comparison helper: `scripts/compare.py REF CKPT...` (P-dev, P-hold, cleaned, full, <1 s speech, minDCF).
+
+## Data analysis (`scripts/data_features.py`, `scripts/analyze_data.py` → `exp/analysis/report.txt`)
+
+- Train 58,404 files / 1,900 speakers / 146 h; public 17,850 files / 902 folders. All 16 kHz mono PCM16.
+- Public is slightly harder: shorter (median 5.4 s vs 7.4 s), noisier (12 % < 15 dB SNR vs 7 %), more
+  band-limited (31 % full-band vs 51 %). Gender (F0 proxy) ≈ 1 M : 2 F in both.
+- **One speaker dominates public**: `id03289` = 29.5 % of target trials (14.6 % of trial slots).
+- **Folder IDs are not identities**: `id03289`/`id03197` are one person (all 365 cross-folder target
+  trials); ~19 further public folder pairs and ~123 train folder pairs look like duplicates; several
+  folders contain 2–3 voices (TV-show host + guests). 3 train files are byte-identical to public files.
+- Speaker ID namespaces of train and public are independent (`id00246` exists in both, different people).
+  ~13–20 public speakers also occur in train under other IDs (~2.4 % of trials) — negligible leakage.
+
+## Zero-shot, approved checkpoints (full public)
+
+| model | params | cos | center | QMF | best back-end |
+|---|---|---|---|---|---|
+| ReDimNet-M mix | 4.81M | 5.87 | 5.50 | 5.15 | 5.00 (center+QMF) |
+| ReDimNet-S mix | 3.15M | 6.53 | 5.92 | 5.70 | 5.39 |
+| WeSpeaker R34-LM | 6.63M | 9.46 | 7.42 | 7.48 | 6.06 |
+| ReDimNet2-B4 vox2 | 6.66M | 9.71 | 7.18 | 7.60 | 6.23 |
+| ReDimNet2-B6 (teacher) | 12.46M | 5.69 | 5.47 | 4.79 | 4.79 |
+
+## G-series: same recipe (F03: 3k steps, early layers frozen, aug, WiSE 0.5 of step 2k) on every model
+
+Full-public QMF EER, zero-shot → fine-tuned → WiSE: M 5.15 → 5.01 → **4.88** (= W01 reproduced) ·
+S 5.70 → **4.93** → 5.06 · B4 7.60 → **5.45** → 5.88 · R34 7.48 → 6.12 → **5.87** · B6 4.79 → 4.42 → **4.19**.
+WiSE helps M/R34/B6, hurts S/B4. VoxCeleb-only models gain most but stay ~0.5 behind ReDimNet v1.
+
+## Failure analysis (`scripts/error_analysis.py` → `exp/analysis/error_report.txt`)
+
+Errors of M+WiSE at its EER threshold, by trial attribute:
+- **Short speech** (energy-VAD speech in the shorter file): < 0.75 s → FRR 21 % (6.6 % of targets, 29 % of FRs).
+- **Same speaker, pitch change** > 5 semitones → FRR 15–16 % (13 % of targets, 43 % of FRs); similar-F0
+  non-targets FA 7 % vs 3.8 %. Models lean on pitch.
+- **Male–male** non-targets FA 10.6 % vs 4.9 % female–female.
+- Level mismatch > 10 dB: FRR 8.6 % (B6 4.8 %); SNR mismatch > 20 dB: FRR 15 %. Very clean pairs FA 8.4 %.
+  Bandwidth and clipping: minor.
+- **Errors concentrate on a few folders**: top-5 target speakers hold 67 % of FRs; 4 folders
+  (`id04411`, `id02686`, `id02481`, `id04017`) hold 29 % — embedding 2-clustering + Gemini listening
+  (analysis only, `scripts/gemini_listen.py`, `exp/analysis/gemini/`) show mixed-voice folders, clips with
+  other voices / no speech, and one person split over several IDs. Removing those targets: 4.88 → 4.08.
+- Errors are shared: 47 % of M's errors are made by all 4 submittable models (88 % of those by B6 too).
+
+## Data cleaning (`scripts/clean_data.py` → `lists/clean/`)
+
+Ensemble of approved models only: train = zero-shot M + B6 (not fine-tuned on train, so noisy labels are
+not memorised), public = fine-tuned M + B6 WiSE. Steps: no-speech files, byte-identical duplicates (and
+train copies of public files), duplicate identities (folder-centroid sim above the 99.99th pct → merged),
+outlier files (LOO sim to own folder < 0.2, or < 0.5 and another identity closer by > 0.1), multi-voice
+folders (2-cluster centroid sim below the 99th pct of cross-folder sims → drop minority cluster).
+Train: 1,394 / 58,404 files dropped, 181 folder pairs merged (1,900 → 1,823 speakers) →
+`lists/clean/train_clean.txt`. Public: 509 files flagged, 2,061 trials removed (labels untouched).
+
+External SV models were downloaded and evaluated for cleaning (WeSpeaker R293/R221-LM, SimAM-R34-VB2,
+3D-Speaker ERes2NetV2/CAM++ zh-200k; registry `EXTERNAL` in `sred/models.py`) but are **not used**:
+individually 6.3–8.4 full-public EER (worse than zero-shot M) and they make the ensemble worse
+(B6w 4.67 → +E2V2+R221 5.29 centered-cosine). Nothing external is used in training or submission.
+
+Retraining on the cleaned list (same recipe, C-series, cleaned-public EER, P(better) vs original list):
+M ft 3.44 → 3.28 (P 0.75), M WiSE 3.28 → 3.30, S ft 3.56 → 3.44 (P 0.69). Small, consistent, not
+significant; cleaned fine-tuning ≈ WiSE (both limit learning from noisy labels). Kept as default.
+Label noise mostly hurts *evaluation*: ≈ 1.5 EER of full-public error is mislabelled trials (floor ≈ 1.4).
+
+## Negative results (do not repeat)
+
+| idea | result (vs baseline) |
+|---|---|
+| label-preserving voice aug (speed 0.9–1.1, pitch ±2 st, tempo 0.85–1.15), `sred/augment.py` | +0.3 cleaned EER (P better ≈ 0.1); no gain on pitch-gap trials |
+| channel aug (gain, time/freq masking, clipping) | ±0.0 |
+| short crops 0.75–3 s (without KD) | worse on < 1 s trials (6.88 → 7.65) |
+| QMF on speech duration / + SNR / + AS-norm / gender-matched AS-norm (`scripts/phase1_scoring.py`) | +0.06 … +0.45 on P-dev |
+| energy-VAD trimming before embedding (`--mode vad`) | EER ±0.0; minDCF 0.142 → 0.130 on P-dev (P 0.95) — optional |
+| KD into B4 (K30) | 3.15 cleaned (worse than M) |
+| 36k steps instead of 18k (K23) | ±0.0 |
+| WiSE α 0.4–0.7, soup of last 4 ckpts, 2-seed soup (K21+K24), 2-teacher targets (K25) | all within ±0.03 |
+| one-shot pruning of B6 to 6.3M + 18k recovery (P01) | 3.93 cleaned |
+| progressive pruning, stage 1 to 8.49M + 9k recovery (P02, still > 7M) | 2.90 cleaned but P-hold 3.24 vs 2.86 → stopped before stage 2 |
+
+## What worked: long→short distillation from fine-tuned B6
+
+`sred/train.py --teacher-emb <cached full-utterance teacher embeddings> --temb-kd --temb-rkd`:
+the student sees 0.75–3 s augmented crops; targets are the teacher's embeddings of the **whole clean
+utterance** (cosine via a learned projection + relational KD on batch similarity matrices) + AAM on the
+cleaned list. Teacher embeddings cached once (`exp/emb/W_G05_B6_avg/trainfull_*.npy`).
+
+| run | setup (all M, cleaned list) | P-dev | P-hold | cleaned | full | < 1 s | P vs C01 |
+|---|---|---|---|---|---|---|---|
+| C01_M | baseline (F03 recipe, cleaned) | 3.23 | 3.24 | 3.28 | 4.85 | 6.88 | – |
+| K10 / K12 | KD, 3k steps, early layers frozen | 3.14 / 3.02 | 3.28 / 3.35 | 3.26 / 3.27 | 4.84 / 4.83 | – | 0.82 / 0.75 |
+| K11 WiSE | KD, all layers, 9k steps, teacher C01_B6 | 2.89 | 3.17 | 3.13 | 4.73 | 6.51 | 0.99 |
+| K20 WiSE | K11 with stronger teacher W_G05_B6 | 2.96 | 3.02 | 3.07 | 4.66 | 6.42 | 0.98 |
+| **K21 WiSE** | **K20, KD weights ×2, 18k steps** | **2.95** | **2.86** | **2.92** | **4.50** | **5.82** | **0.98** |
+| K22 WiSE | K21 weights, 9k steps | 2.92 | 3.00 | 3.02 | 4.64 | 6.33 | 0.97 |
+| teacher W_G05_B6 | 12.46M, not submittable | 2.40 | 2.27 | 2.31 | 4.19 | 4.10 | – |
+
+KD needs capacity (all layers) and length (18k); WiSE 0.5 (step 12k ⊕ pretrained) is still needed against
+drift. Run-to-run noise (K21 vs seed-1 K24) ≤ 0.02. Milestone target (≤ 2.5 cleaned) not reached:
+3.28 → 2.92 closes ~half of the student–teacher gap; within the rules (approved checkpoints, ≤ 7M) the
+remaining gap is architectural. Pruning code: `sred/prune.py` (data-driven channel pruning of
+ReDimNet2 with least-squares block repair; explainer video `scripts/make_pruning_video.py`).
+
+## Reproduce / private test
+
+```bash
+# K21 (needs exp/emb/W_G05_B6_avg/trainfull_*.npy from: clean_data.py --models exp/ft/W_G05_B6/avg.pt --extract-only)
+WISE_STEP=12000 scripts/c_sweep.sh redimnet_M_mix K21_M stem lists/clean/train_clean.txt \
+  --teacher-emb exp/emb/W_G05_B6_avg/trainfull_modefull_f5574c4d.npy --min-crop-sec 0.75 \
+  --temb-kd 2.0 --temb-rkd 20 --steps 18000 --save-every 2000
+
+# private test -> leaderboard zip (results.txt inside; checks order/format; refuses on missing audio)
+scripts/make_final_submission.sh <private-trials.txt> <private audio dir> result-private-MMDD.zip private
+```

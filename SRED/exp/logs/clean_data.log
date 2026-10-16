@@ -1,0 +1,9 @@
+[train] cross-folder centroid sim q50 0.006 q99.9 0.498; merge threshold (q0.9999) 0.763 -> 181 folder pairs
+[train] file->own-folder sim median 0.857 (q01 0.262); best-other-identity median 0.441; outlier = own<0.2 or (own<0.5 and margin<-0.1) -> 1166 outlier files
+[train] folder 2-cluster between-sim median 0.625; split threshold (q0.99 of cross-folder centroid sim) 0.371 -> 98 multi-voice folders
+[train] dropped 1394 / 58404 files {'outlier': 1162, 'minor_voice_in_folder': 216, 'no_speech': 10, 'duplicate_file': 3, 'identical_to_public': 3}; speakers 1900 -> 1823 after merging 181 duplicate-identity pairs
+[public] cross-folder centroid sim q50 -0.008 q99.9 0.485; merge threshold (q0.9999) 0.672 -> 41 folder pairs
+[public] file->own-folder sim median 0.836 (q01 0.299); best-other-identity median 0.414; outlier = own<0.2 or (own<0.5 and margin<-0.1) -> 251 outlier files
+[public] folder 2-cluster between-sim median 0.604; split threshold (q0.99 of cross-folder centroid sim) 0.356 -> 52 multi-voice folders
+[public] flagged files 509; trials kept 47932 / 49993 removed {'file_flagged': 2055, 'nontarget_but_same_identity': 6}
+wrote /home/jovyan/work/thuc/VLSP-2026/SRED/lists/clean

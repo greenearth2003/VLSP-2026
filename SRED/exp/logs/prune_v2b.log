@@ -1,0 +1,33 @@
+  2d stage0.3.conv_block: 192->80  rel.err refit 0.059
+  2d stage0.4.conv_block: 192->80  rel.err refit 0.117
+  2d stage0.5.conv_block: 192->80  rel.err refit 0.149
+  1d stage0.8: 72->32  rel.err sliced 0.315 -> refit 0.124
+  2d stage1.3.conv_block: 256->104  rel.err refit 0.074
+  2d stage1.4.conv_block: 256->104  rel.err refit 0.092
+  2d stage1.5.conv_block: 256->104  rel.err refit 0.142
+  2d stage1.6.conv_block: 256->104  rel.err refit 0.140
+  1d stage1.9: 72->32  rel.err sliced 0.443 -> refit 0.209
+  2d stage2.3.conv_block: 256->104  rel.err refit 0.064
+  2d stage2.4.conv_block: 256->104  rel.err refit 0.137
+  2d stage2.5.conv_block: 256->104  rel.err refit 0.176
+  2d stage2.6.conv_block: 256->104  rel.err refit 0.170
+  2d stage2.7.conv_block: 256->104  rel.err refit 0.184
+  1d stage2.10: 96->40  rel.err sliced 0.611 -> refit 0.322
+  2d stage3.3.conv_block: 256->104  rel.err refit 0.083
+  2d stage3.4.conv_block: 256->104  rel.err refit 0.177
+  2d stage3.5.conv_block: 256->104  rel.err refit 0.162
+  2d stage3.6.conv_block: 256->104  rel.err refit 0.199
+  2d stage3.7.conv_block: 256->104  rel.err refit 0.174
+  1d stage3.9: 96->40  rel.err sliced 0.777 -> refit 0.308
+  2d stage4.3.conv_block: 192->80  rel.err refit 0.109
+  2d stage4.4.conv_block: 192->80  rel.err refit 0.177
+  2d stage4.5.conv_block: 192->80  rel.err refit 0.153
+  2d stage4.6.conv_block: 192->80  rel.err refit 0.100
+  1d stage4.9: 144->64  rel.err sliced 0.622 -> refit 0.265
+  2d stage5.3.conv_block: 256->104  rel.err refit 0.097
+  2d stage5.4.conv_block: 256->104  rel.err refit 0.170
+  2d stage5.5.conv_block: 256->104  rel.err refit 0.133
+  1d stage5.8: 192->88  rel.err sliced 1.152 -> refit 0.167
+  head: 224->180 channels  rel.err sliced 0.064 -> refit 0.002 (n=6144)
+redimnet2_b6_mix_teacher_pt: 12.459M -> 6.332M params (50.8%); emb (2, 192)
+wrote exp/ft/P_B6_v2b/init.pt

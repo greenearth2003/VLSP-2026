@@ -1,9 +1,15 @@
-"""On-GPU waveform augmentation for robustness to noise / channel / edge mics.
+"""On-GPU waveform augmentation for robustness to noise / channel / edge mics / voice variation.
 
 No external corpora needed: babble comes from other utterances in the batch,
 noise is synthetic coloured noise, reverberation uses synthetic exponential-decay
 RIRs, and channel effects are simulated with band-limiting, random EQ and mu-law.
 If MUSAN / RIR corpora are available, pass their waveforms via `noise_bank`.
+
+Voice / prosody augmentations (label-preserving, mild ranges; at most one per sample):
+  speed  -- resample by r (pitch and duration change together, Kaldi-style speed perturbation)
+  pitch  -- shift pitch by +-n semitones, duration unchanged (phase-vocoder stretch + resample)
+  tempo  -- change speaking rate by r, pitch unchanged (phase vocoder)
+Other: gain (level), time masking (zeroed chunks), frequency masking (band-stop), clipping.
 """
 from __future__ import annotations
 
@@ -53,10 +59,42 @@ def fft_conv(x, h):
     return y[..., : x.shape[-1]]
 
 
+def _fit_length(y: torch.Tensor, T: int) -> torch.Tensor:
+    """Crop or wrap-pad [B, T'] to [B, T]."""
+    if y.shape[-1] >= T:
+        return y[..., :T]
+    reps = math.ceil(T / y.shape[-1])
+    return y.repeat(1, reps)[..., :T]
+
+
+def resample_rate(x: torch.Tensor, r: float) -> torch.Tensor:
+    """Play back r times faster (r>1: shorter + higher pitch). Linear interpolation (fine for |r-1|<~0.2)."""
+    n = max(2, int(round(x.shape[-1] / r)))
+    return F.interpolate(x[:, None], size=n, mode="linear", align_corners=False)[:, 0]
+
+
+def time_stretch(x: torch.Tensor, r: float, n_fft: int = 512, hop: int = 128) -> torch.Tensor:
+    """Change duration by 1/r without changing pitch (phase vocoder)."""
+    win = torch.hann_window(n_fft, device=x.device)
+    spec = torch.stft(x, n_fft, hop, window=win, return_complex=True)
+    adv = torch.linspace(0, math.pi * hop, spec.shape[-2], device=x.device)[..., None]
+    st = AF.phase_vocoder(spec, r, adv)
+    return torch.istft(st, n_fft, hop, window=win, length=int(round(x.shape[-1] / r)))
+
+
+def pitch_shift(x: torch.Tensor, semitones: float) -> torch.Tensor:
+    """Shift pitch by `semitones`, keeping duration: stretch by 1/f, then resample by f."""
+    f = 2 ** (semitones / 12)
+    return resample_rate(time_stretch(x, 1 / f), f)
+
+
 class Augmenter:
     def __init__(self, p_noise=0.6, p_reverb=0.3, p_band=0.2, p_eq=0.3, p_mulaw=0.1,
                  snr_babble=(13, 20), snr_noise=(5, 20), noise_bank: torch.Tensor | None = None,
-                 snr_bank=(0, 15)):
+                 snr_bank=(0, 15),
+                 p_speed=0.0, speed_range=(0.9, 1.1), p_pitch=0.0, pitch_range=(-2.0, 2.0),
+                 p_tempo=0.0, tempo_range=(0.85, 1.15), p_gain=0.0, gain_db=(-20.0, 10.0),
+                 p_timemask=0.0, timemask=(1, 3, 0.05, 0.25), p_freqmask=0.0, p_clip=0.0, n_groups=4):
         self.__dict__.update(locals())
         del self.__dict__["self"]
 
@@ -69,6 +107,28 @@ class Augmenter:
         B, T = x.shape
         dev = x.device
         x = x.clone()
+
+        # voice / prosody first (it is a property of the source): at most one of speed / pitch / tempo.
+        # Samples are grouped into a few shared factors so each op runs batched.
+        u = self._rand(B, dev)
+        ps, pp, pt = self.p_speed, self.p_pitch, self.p_tempo
+        ops = ((u < ps, "speed"), ((u >= ps) & (u < ps + pp), "pitch"), ((u >= ps + pp) & (u < ps + pp + pt), "tempo"))
+        for m, kind in ops:
+            idx = m.nonzero().squeeze(1)
+            if len(idx) == 0:
+                continue
+            g = torch.randint(0, self.n_groups, (len(idx),))
+            for k in range(self.n_groups):
+                sel = idx[g == k]
+                if len(sel) == 0:
+                    continue
+                if kind == "speed":
+                    y = resample_rate(x[sel], float(torch.empty(1).uniform_(*self.speed_range)))
+                elif kind == "pitch":
+                    y = pitch_shift(x[sel], float(torch.empty(1).uniform_(*self.pitch_range)))
+                else:
+                    y = time_stretch(x[sel], float(torch.empty(1).uniform_(*self.tempo_range)))
+                x[sel] = _fit_length(y, T)
 
         # reverberation first (source in room), then additive noise
         m = self._rand(B, dev) < self.p_reverb
@@ -135,6 +195,37 @@ class Augmenter:
             peak = y.abs().amax(-1, keepdim=True).clamp_min(1e-6)
             q = AF.mu_law_encoding(y / peak, 256)
             x[m] = AF.mu_law_decoding(q, 256) * peak
+
+        m = self._rand(B, dev) < self.p_freqmask  # SpecAugment-style frequency masking (1-2 band-stops)
+        if m.any():
+            n = int(m.sum())
+            f = torch.fft.rfftfreq(T, 1 / SR).to(dev)[None]
+            resp = torch.ones(n, f.shape[1], device=dev)
+            for _ in range(int(torch.randint(1, 3, (1,)))):
+                fc = torch.exp(torch.empty(n, 1, device=dev).uniform_(math.log(200), math.log(7000)))
+                bw = fc * torch.empty(n, 1, device=dev).uniform_(0.1, 0.4)
+                resp = resp * (1 - 0.97 * torch.exp(-0.5 * ((f - fc) / bw) ** 2))
+            x[m] = torch.fft.irfft(torch.fft.rfft(x[m]) * resp, n=T)
+
+        m = self._rand(B, dev) < self.p_clip  # overdriven mic: drive into hard clipping
+        if m.any():
+            y = x[m]
+            lvl = y.abs().amax(-1, keepdim=True).clamp_min(1e-6) * torch.empty(len(y), 1, device=dev).uniform_(0.2, 0.6)
+            x[m] = torch.maximum(torch.minimum(y, lvl), -lvl) / lvl * y.abs().amax(-1, keepdim=True)
+
+        m = self._rand(B, dev) < self.p_timemask  # SpecAugment-style time masking: zero 1-3 chunks
+        if m.any():
+            nmin, nmax, fmin, fmax = self.timemask
+            for i in m.nonzero().squeeze(1).tolist():
+                for _ in range(int(torch.randint(nmin, nmax + 1, (1,)))):
+                    w = int(T * float(torch.empty(1).uniform_(fmin, fmax)) / nmax)
+                    st = int(torch.randint(0, max(1, T - w), (1,)))
+                    x[i, st:st + w] = 0
+
+        m = self._rand(B, dev) < self.p_gain  # level perturbation
+        if m.any():
+            g = torch.empty(int(m.sum()), 1, device=dev).uniform_(*self.gain_db)
+            x[m] = x[m] * 10 ** (g / 20)
 
         # keep amplitude in a sane range
         peak = x.abs().amax(-1, keepdim=True)

@@ -5,12 +5,13 @@ Pipeline for the VLSP 2026 Vi-SRED26 challenge (EER metric, < 7M inference param
 ## Setup
 
 ```bash
-cd /home/jovyan/code/VLSP-2026/SRED
+cd VLSP-2026/SRED
 uv sync                       # creates .venv (torch 2.5.1 cu124)
-source env.sh                 # LD_LIBRARY_PATH for the L4 driver, data root, torch hub cache
+source env.sh                 # paths relative to the repo: data root, torch hub cache
 ```
 
-Data (unzipped from the official zips) lives in `$SRED_DATA` (default `/home/jovyan/data/VLSP2026/Vi-SRED26`):
+Data (unzipped from the official zips, mirrored at `gs://cake-ds-intern/VLSP-2026/SRED/Dataset/`) lives in
+`$SRED_DATA` (default `SRED/data/Vi-SRED26`, git-ignored):
 
 ```
 train/train.txt         "<spk> <spk>/<utt>.wav"   58,404 utts, 1,900 speakers, ~144 h, 16 kHz mono
@@ -60,3 +61,14 @@ Submission format: `file1.wav file2.wav score`, same order as the trial list.
 * Pretrained checkpoints must be on the organisers' approved list before use in a submission.
 
 See `EXPERIMENTS.md` for results.
+
+## Current final system (2026-10-16)
+
+`exp/ft/W_K21_M/avg.pt` — ReDimNet-M (4.81M) distilled from fine-tuned ReDimNet2-B6 on the cleaned train
+list (`lists/clean/train_clean.txt`), WiSE-FT 0.5, scored with cosine + QMF(dur). Public EER 4.50 %.
+Checkpoints are git-ignored: keep a backup of `exp/ft/W_K21_M/avg.pt`.
+
+```bash
+# private test -> leaderboard zip (results.txt inside: "file1 file2 score", no header, trial-list order)
+scripts/make_final_submission.sh <private-trials.txt> <private audio dir> result-private-MMDD.zip private
+```

@@ -1,0 +1,36 @@
+base=redimnet_M_mix params=4.812M
+head init from full-train centroids (cleaned labels) /home/jovyan/work/thuc/VLSP-2026/SRED/exp/emb/redimnet_M_mix/trainfull_modefull_f5574c4d.npy
+frozen: ['stem', 'stage0', 'stage1', 'stage2'] trainable=3.422M
+step 0 dev_eer=inf
+step 100 loss=3.618 acc=0.838 kd=0.0000 lr=0.00e+00 0.56s/it
+step 200 loss=3.326 acc=0.861 kd=0.0000 lr=0.00e+00 0.51s/it
+step 300 loss=2.859 acc=0.894 kd=0.0000 lr=1.99e-05 0.50s/it
+step 400 loss=2.825 acc=0.890 kd=0.0000 lr=1.98e-05 0.49s/it
+step 500 loss=2.790 acc=0.886 kd=0.0000 lr=1.95e-05 0.48s/it
+step 600 loss=2.702 acc=0.893 kd=0.0000 lr=1.91e-05 0.48s/it
+step 700 loss=2.654 acc=0.891 kd=0.0000 lr=1.85e-05 0.48s/it
+step 800 loss=2.684 acc=0.895 kd=0.0000 lr=1.79e-05 0.48s/it
+step 900 loss=2.621 acc=0.892 kd=0.0000 lr=1.72e-05 0.47s/it
+step 1000 loss=2.488 acc=0.899 kd=0.0000 lr=1.64e-05 0.47s/it
+step 1100 loss=2.468 acc=0.903 kd=0.0000 lr=1.56e-05 0.47s/it
+step 1200 loss=2.419 acc=0.909 kd=0.0000 lr=1.46e-05 0.47s/it
+step 1300 loss=2.301 acc=0.907 kd=0.0000 lr=1.36e-05 0.47s/it
+step 1400 loss=2.333 acc=0.908 kd=0.0000 lr=1.26e-05 0.47s/it
+step 1500 loss=2.317 acc=0.907 kd=0.0000 lr=1.16e-05 0.47s/it
+step 1600 loss=2.334 acc=0.902 kd=0.0000 lr=1.05e-05 0.47s/it
+step 1700 loss=2.235 acc=0.918 kd=0.0000 lr=9.44e-06 0.47s/it
+step 1800 loss=2.135 acc=0.919 kd=0.0000 lr=8.39e-06 0.47s/it
+step 1900 loss=2.008 acc=0.924 kd=0.0000 lr=7.36e-06 0.47s/it
+step 2000 loss=1.896 acc=0.937 kd=0.0000 lr=6.38e-06 0.47s/it
+step 2100 loss=1.913 acc=0.927 kd=0.0000 lr=5.45e-06 0.47s/it
+step 2200 loss=1.885 acc=0.931 kd=0.0000 lr=4.58e-06 0.47s/it
+step 2300 loss=1.916 acc=0.931 kd=0.0000 lr=3.78e-06 0.47s/it
+step 2400 loss=1.941 acc=0.929 kd=0.0000 lr=3.07e-06 0.47s/it
+step 2500 loss=1.963 acc=0.928 kd=0.0000 lr=2.46e-06 0.47s/it
+step 2600 loss=1.977 acc=0.934 kd=0.0000 lr=1.94e-06 0.47s/it
+step 2700 loss=1.856 acc=0.932 kd=0.0000 lr=1.53e-06 0.47s/it
+step 2800 loss=1.972 acc=0.923 kd=0.0000 lr=1.24e-06 0.47s/it
+step 2900 loss=1.910 acc=0.933 kd=0.0000 lr=1.06e-06 0.46s/it
+step 3000 loss=1.785 acc=0.939 kd=0.0000 lr=1.00e-06 0.46s/it
+step 3000 dev_eer=nan
+done best_dev_eer=inf

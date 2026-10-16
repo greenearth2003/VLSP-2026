@@ -49,6 +49,16 @@ def build_redimnet2(config: dict) -> nn.Module:
     return ReDimNet2Wrap(**config)
 
 
+def _load_redimnet2_pt(ckpt: Path) -> nn.Module:
+    """Official PalabraAI GitHub release checkpoint ({model_config, state_dict})."""
+    full = torch.load(ckpt, map_location="cpu", weights_only=False)
+    model = build_redimnet2(full["model_config"])
+    res = model.load_state_dict(full["state_dict"])
+    assert not res.missing_keys and not res.unexpected_keys, res
+    model.model_config = full["model_config"]
+    return model
+
+
 def _load_redimnet2_mlx(mlx_dir: Path) -> nn.Module:
     from safetensors.numpy import load_file
 
@@ -144,6 +154,9 @@ REGISTRY = {
     "redimnet2_b4_vox2": ("v2mlx", "causal__redimnet2-b4-vox2-lm-mlx"),
     "redimnet2_b3_vox2": ("v2mlx", "causal__redimnet2-b3-vox2-lm-mlx"),
     "redimnet2_b3_mix": ("v2mlx", "causal__redimnet2-b3-vb2-vox2-cnc2-lm-mlx"),
+    # official PalabraAI GitHub release v1.0.0 weights
+    "redimnet2_b4_vox2_pt": ("v2pt", "redimnet2/b4-vox2-lm.pt"),
+    "redimnet2_b6_mix_teacher_pt": ("v2pt", "redimnet2/b6-vb2+vox2+cnc2_v0-lm.pt"),
     "wespeaker_r34_lm": ("wespeaker:avg_model", "Wespeaker__wespeaker-voxceleb-resnet34-LM"),
     "wespeaker_samr34_vb2": ("wespeaker:avg_model.pt", "gaunernst__wespeaker-voxblink2-samresnet34-ft"),
     "wespeaker_ecapa512_lm": ("wespeaker:avg_model.pt", "Wespeaker__wespeaker-ecapa-tdnn512-LM"),
@@ -159,12 +172,16 @@ def load_model(name: str) -> nn.Module:
     path = PRETRAINED / rel
     if kind == "v1":
         model = _load_redimnet_v1(path)
+    elif kind == "v2pt":
+        model = _load_redimnet2_pt(path)
     elif kind == "v2mlx":
         model = _load_redimnet2_mlx(path)
     elif kind == "v2gguf":
         model = _load_redimnet2_gguf(path)
     elif kind.startswith("wespeaker:"):
         model = _load_wespeaker(path, kind.split(":", 1)[1])
+    elif kind.startswith("3ds:"):
+        model = _load_3dspeaker(path, kind.split(":", 1)[1])
     else:
         raise ValueError(kind)
     return model.eval()
@@ -173,6 +190,9 @@ def load_model(name: str) -> nn.Module:
 def load_finetuned(ckpt: Path) -> nn.Module:
     state = torch.load(ckpt, map_location="cpu", weights_only=False)
     model = load_model(state["base_model"])
+    if state.get("prune"):  # structurally pruned checkpoint (sred/prune.py): rebuild the slim architecture first
+        from .prune import apply_indices
+        apply_indices(model, state["prune"])
     model.load_state_dict(state["model"])
     return model.eval()
 
@@ -218,3 +238,49 @@ def _load_redimnet2_gguf(path: Path) -> nn.Module:
 
 
 REGISTRY["redimnet2_b6_mix_teacher"] = ("v2gguf", "OpenASR__redimnet2-b6-cn/redimnet2-b6-cn-fp16.oasr")
+
+
+# ----------------------------------------------------------------------------
+# EXTERNAL models -- NOT on the organisers' approved list. Used only for data
+# cleaning / analysis (flagging mislabelled train/test files), never for the submission.
+# ----------------------------------------------------------------------------
+THREEDSPEAKER_SRC = ROOT / "third_party/3D-Speaker"
+
+
+class FbankCMNWrap(nn.Module):
+    """3D-Speaker front-end: Kaldi fbank (povey window, float wav) + per-utterance mean norm."""
+
+    def __init__(self, backbone: nn.Module):
+        super().__init__()
+        self.backbone = backbone
+
+    def forward(self, wav: torch.Tensor) -> torch.Tensor:
+        feats = []
+        for w in wav:
+            f = torchaudio.compliance.kaldi.fbank(w.unsqueeze(0), num_mel_bins=80, sample_frequency=16000, dither=0.0)
+            feats.append(f - f.mean(dim=0, keepdim=True))
+        return self.backbone(torch.stack(feats))
+
+
+def _load_3dspeaker(ckpt: Path, arch: str) -> nn.Module:
+    sys.path.insert(0, str(THREEDSPEAKER_SRC))
+    if arch == "eres2netv2":
+        from speakerlab.models.eres2net.ERes2NetV2 import ERes2NetV2
+        backbone = ERes2NetV2(feat_dim=80, embedding_size=192, baseWidth=26, scale=2, expansion=2)
+    elif arch == "campplus":
+        from speakerlab.models.campplus.DTDNN import CAMPPlus
+        backbone = CAMPPlus(feat_dim=80, embedding_size=192)
+    else:
+        raise ValueError(arch)
+    backbone.load_state_dict(torch.load(ckpt, map_location="cpu", weights_only=False))
+    return FbankCMNWrap(backbone)
+
+
+EXTERNAL = {
+    "ext_wespeaker_r293_lm": ("wespeaker:avg_model.pt", "external/Wespeaker__wespeaker-voxceleb-resnet293-LM"),
+    "ext_wespeaker_r221_lm": ("wespeaker:voxceleb_resnet221_LM.pt", "external/Wespeaker__wespeaker-voxceleb-resnet221-LM"),
+    "ext_wespeaker_samr34_vb2": ("wespeaker:avg_model.pt", "external/gaunernst__wespeaker-voxblink2-samresnet34-ft"),
+    "ext_3ds_eres2netv2_zh200k": ("3ds:eres2netv2", "external/3dspeaker/pretrained_eres2netv2.ckpt"),
+    "ext_3ds_campplus_zh200k": ("3ds:campplus", "external/3dspeaker/campplus_cn_common.bin"),
+}
+REGISTRY.update(EXTERNAL)

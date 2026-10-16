@@ -25,6 +25,29 @@ def _segments(wav: torch.Tensor, crop: int, hop: int) -> list[torch.Tensor]:
     return [wav[s:s + crop] for s in starts]
 
 
+def vad_trim(wav: torch.Tensor, pad_frames: int = 15, min_keep_sec: float = 1.0) -> torch.Tensor:
+    """Energy VAD (same rule as scripts/data_features.py): keep 25 ms frames above
+    max(p10 + min(12, (p95-p10)/2), p95 - 35) dB, dilated by `pad_frames` (10 ms hop) on both sides,
+    and concatenate them. Falls back to the input if less than `min_keep_sec` would remain."""
+    fl, hop = 400, 160
+    if wav.shape[-1] < fl * 4:
+        return wav
+    fr = wav.unfold(0, fl, hop)
+    db = 10 * torch.log10(fr.pow(2).mean(-1) + 1e-10)
+    p10, p95 = torch.quantile(db, 0.10), torch.quantile(db, 0.95)
+    keep = db > torch.maximum(p10 + torch.clamp((p95 - p10) / 2, max=12.0), p95 - 35)
+    keep = F.max_pool1d(keep.float()[None, None], 2 * pad_frames + 1, 1, pad_frames)[0, 0] > 0
+    mask = torch.zeros_like(wav, dtype=torch.bool)
+    idx = keep.nonzero().squeeze(1)
+    if len(idx) == 0:
+        return wav
+    starts = idx * hop
+    for st in starts.tolist():  # frames overlap; mark hop-sized blocks + tail
+        mask[st:st + fl] = True
+    out = wav[mask]
+    return out if out.shape[-1] >= int(min_keep_sec * 16000) else wav
+
+
 @torch.inference_mode()
 def embed_wav(model, wav: torch.Tensor, mode: str = "full", crop_sec: float = 3.0,
               hop_sec: float = 1.5, min_sec: float = 0.5, max_sec: float = 60.0) -> torch.Tensor:
@@ -34,8 +57,11 @@ def embed_wav(model, wav: torch.Tensor, mode: str = "full", crop_sec: float = 3.
       full       - one forward pass on whole utterance
       crop       - mean of L2-normalised embeddings of overlapping crops
       full+crop  - mean of normalised full embedding and normalised crop mean
+      vad        - full, after energy-VAD silence removal (vad_trim)
     """
     sr = 16000
+    if mode == "vad":
+        wav, mode = vad_trim(wav), "full"
     wav = wav[: int(max_sec * sr)]
     if wav.shape[-1] < int(min_sec * sr):  # repeat-pad very short audio
         reps = int(np.ceil(min_sec * sr / max(1, wav.shape[-1])))

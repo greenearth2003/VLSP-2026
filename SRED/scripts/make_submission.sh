@@ -3,7 +3,7 @@
 # Example (private test):
 #   scripts/make_submission.sh $SRED_DATA/private_test/private-test.txt $SRED_DATA/private_test/data private submissions/private.txt
 set -e
-cd /home/jovyan/code/VLSP-2026/SRED && source env.sh
+cd "$(dirname "$0")/.." && source env.sh
 MODEL=${5:-redimnet_M_mix}
 BACKEND=${6:-center+qmf_dur}
 .venv/bin/python -m sred.evaluate --model "$MODEL" --trials "$1" --audio-root "$2" --split "$3" \

@@ -79,3 +79,63 @@ class QMF:
             asn = 0.5 * ((s - mu[ia]) / sd[ia] + (s - mu[ib]) / sd[ib])
         X = _features(s, dur[ia], dur[ib], asn)
         return self.lr.decision_function((X - self.mu) / self.sd)
+
+
+class QMF2:
+    """Generalised QMF: logistic regression over the raw score and per-trial quality measures.
+
+    quality: dict name -> per-file array (e.g. speech duration in s, SNR in dB). For each measure q the
+    features are [log/linear min(q_a, q_b), max(...), s*min, s*max]; durations are log-transformed.
+    extra_score: optional second score (e.g. gender-matched AS-norm), added with its own interactions.
+    Fitted on synthetic trials from train-cohort embeddings (no test labels).
+    """
+
+    LOG = {"dur", "speech"}
+
+    def __init__(self, names, n_nontarget: int = 300000, seed: int = 0):
+        self.names, self.n_nontarget, self.seed = list(names), n_nontarget, seed
+
+    def _feats(self, s, qa: dict, qb: dict, extra=None):
+        f = [s]
+        for k in self.names:
+            a, b = qa[k], qb[k]
+            if k in self.LOG:
+                a, b = np.log(np.maximum(a, 0.05)), np.log(np.maximum(b, 0.05))
+            lo, hi = np.minimum(a, b), np.maximum(a, b)
+            f += [lo, hi, s * lo, s * hi]
+        if extra is not None:
+            f += [extra, extra * f[1] if len(f) > 1 else extra]
+        return np.stack(f, 1)
+
+    def trials(self, spk):
+        spk = np.asarray(spk)
+        rng = np.random.default_rng(self.seed)
+        n = len(spk)
+        I, J = rng.integers(0, n, self.n_nontarget), rng.integers(0, n, self.n_nontarget)
+        order = np.argsort(spk, kind="stable")
+        ti, tj = [], []
+        for k in range(n - 1):
+            i = order[k]
+            for m in range(k + 1, min(n, k + 10)):
+                j = order[m]
+                if spk[j] != spk[i]:
+                    break
+                ti.append(i)
+                tj.append(j)
+        I, J = np.concatenate([I, ti]), np.concatenate([J, tj])
+        keep = I != J
+        return I[keep], J[keep], (spk[I[keep]] == spk[J[keep]]).astype(int)
+
+    def fit(self, cohort, spk, quality: dict, extra_fn=None):
+        I, J, y = self.trials(spk)
+        s = np.sum(cohort[I] * cohort[J], 1)
+        extra = extra_fn(I, J, s) if extra_fn is not None else None
+        X = self._feats(s, {k: v[I] for k, v in quality.items()}, {k: v[J] for k, v in quality.items()}, extra)
+        self.mu, self.sd = X.mean(0), X.std(0) + 1e-9
+        self.lr = LogisticRegression(C=1.0, max_iter=3000, class_weight="balanced").fit((X - self.mu) / self.sd, y)
+        return self
+
+    def score(self, emb, quality: dict, ia, ib, extra=None):
+        s = np.sum(emb[ia] * emb[ib], 1)
+        X = self._feats(s, {k: v[ia] for k, v in quality.items()}, {k: v[ib] for k, v in quality.items()}, extra)
+        return self.lr.decision_function((X - self.mu) / self.sd)

@@ -85,7 +85,7 @@ class CropDataset(torch.utils.data.Dataset):
         else:
             wav, _ = sf.read(str(TRAIN_DIR / rel), dtype="float32")
             wav = np.tile(wav, int(np.ceil(self.crop / max(1, len(wav)))))[: self.crop]
-        return torch.from_numpy(wav), self.spk2id[spk]
+        return torch.from_numpy(wav), self.spk2id[spk], i
 
 
 class EndlessSampler(torch.utils.data.Sampler):
@@ -143,8 +143,9 @@ def freeze_before(model, name):
     if not name:
         return []
     frozen = []
-    for p in model.spec.parameters():
-        p.requires_grad_(False)
+    if hasattr(model, "spec"):  # WeSpeaker wraps a parameter-free fbank instead
+        for p in model.spec.parameters():
+            p.requires_grad_(False)
     for n, mod in model.backbone.named_children():
         if n == name:
             break
@@ -177,10 +178,22 @@ def main(argv=None):
     ap.add_argument("--scale", type=float, default=30.0)
     ap.add_argument("--subcenters", type=int, default=3)
     ap.add_argument("--aug", type=float, default=1.0, help="scale all augmentation probs; 0 disables")
+    for k, h in (("speed", "speed perturbation 0.9-1.1"), ("pitch", "pitch shift +-2 semitones"),
+                 ("tempo", "tempo 0.85-1.15, pitch kept"), ("gain", "level -20..+10 dB"),
+                 ("timemask", "zero 1-3 chunks"), ("freqmask", "1-2 band-stops"), ("clip", "hard clipping")):
+        ap.add_argument(f"--aug-{k}", type=float, default=0.0, help=f"prob of {h} (default off)")
     ap.add_argument("--kd", type=float, default=0.0, help="weight of clean->aug consistency KD to frozen base")
     ap.add_argument("--teacher", default=None, help="registry name of an external frozen teacher (e.g. B6)")
     ap.add_argument("--rkd", type=float, default=0.0, help="weight of relational KD (batch similarity matrix)")
     ap.add_argument("--teacher-clean", type=int, default=1, help="teacher sees clean audio (1) or augmented (0)")
+    ap.add_argument("--teacher-emb", default=None,
+                    help="cached FULL-utterance teacher embeddings (.npy, rows = original train.txt order): "
+                         "long->short KD, the student sees crops, the target is the whole clean utterance")
+    ap.add_argument("--temb-kd", type=float, default=0.0, help="weight of 1-cos(proj(student), teacher_full)")
+    ap.add_argument("--temb-rkd", type=float, default=0.0, help="weight of relational KD vs cached teacher")
+    ap.add_argument("--head-init-emb", default=None,
+                    help="init the AAM head from speaker centroids of these cached embeddings (.npy, train.txt order); "
+                         "use the teacher's when the student shares its embedding space (e.g. pruned B6)")
     ap.add_argument("--spk-balanced", action="store_true")
     ap.add_argument("--freeze-bn", action="store_true")
     ap.add_argument("--amp", default="none", choices=["none", "bf16", "fp16"])
@@ -192,6 +205,7 @@ def main(argv=None):
     ap.add_argument("--init-ckpt", default=None, help="continue from a fine-tuned checkpoint (LMFT)")
     ap.add_argument("--train-from", default=None,
                     help="freeze backbone modules before this one, e.g. stage3 (cheaper backward)")
+    ap.add_argument("--train-list", default=None, help="alternative train list, e.g. lists/clean/train_clean.txt")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--resume", action="store_true", help="continue from <out>/resume.pt if present")
     ap.add_argument("--workers", type=int, default=7)
@@ -214,13 +228,18 @@ def main(argv=None):
         log.write(s + "\n")
         log.flush()
 
-    items = read_train_list()
+    items = read_train_list(Path(args.train_list)) if args.train_list else read_train_list()
     spks = sorted({s for s, _ in items})
     spk2id = {s: i for i, s in enumerate(spks)}
     lengths = train_lengths(items)
 
     model = load_model(args.base)
     init_state = None
+    prune_idx = None
+    if Path(args.base).exists():
+        _b = torch.load(args.base, map_location="cpu", weights_only=False)
+        prune_idx = _b.get("prune")
+        del _b
     if args.init_ckpt:
         init_state = torch.load(args.init_ckpt, map_location="cpu", weights_only=False)
         model.load_state_dict(init_state["model"])
@@ -233,6 +252,21 @@ def main(argv=None):
     ck = cache_key(args.base, "traincohort5", [r for _, r in coh_items], mode="full")
     if init_state is not None and "head" in init_state:
         init = None
+    elif args.head_init_emb:
+        all_files = [r for _, r in read_train_list()]
+        pos = {r: i for i, r in enumerate(all_files)}
+        emb = np.load(args.head_init_emb)[[pos[r] for _, r in items]]
+        init = torch.from_numpy(speaker_means(emb, [s for s, _ in items]))
+        P("head init from centroids of", args.head_init_emb)
+    elif args.train_list:
+        # cleaned list (merged IDs / dropped files): init from full-train embeddings of the base model
+        all_files = [r for _, r in read_train_list()]
+        ck_full = cache_key(args.base, "trainfull", all_files, mode="full")
+        if ck_full.exists():
+            pos = {r: i for i, r in enumerate(all_files)}
+            emb = np.load(ck_full)[[pos[r] for _, r in items]]
+            init = torch.from_numpy(speaker_means(emb, [s for s, _ in items]))
+            P("head init from full-train centroids (cleaned labels)", ck_full)
     elif ck.exists():
         cents = speaker_means(np.load(ck), [s for s, _ in coh_items])
         init = torch.from_numpy(cents)
@@ -258,15 +292,34 @@ def main(argv=None):
             p.requires_grad_(False)
         P("teacher:", args.teacher or "frozen copy of base")
 
+    temb = proj = None
+    if args.teacher_emb:
+        all_rels = [r for _, r in read_train_list()]
+        row = {r: i for i, r in enumerate(all_rels)}
+        T = np.load(args.teacher_emb)
+        assert len(T) == len(all_rels), (T.shape, len(all_rels))
+        T = T / np.linalg.norm(T, axis=1, keepdims=True)
+        temb = torch.from_numpy(T[[row[r] for _, r in items]]).float().to(device)  # aligned with `items`
+        proj = nn.Linear(emb_dim, temb.shape[1], bias=False).to(device)
+        if emb_dim == temb.shape[1]:  # same space (pruned teacher): start from identity, not a random map
+            with torch.no_grad():
+                proj.weight.copy_(torch.eye(emb_dim))
+        P(f"long->short KD from cached teacher {args.teacher_emb} dim={temb.shape[1]} "
+          f"kd={args.temb_kd} rkd={args.temb_rkd}")
+
     aug = Augmenter(p_noise=0.6 * args.aug, p_reverb=0.3 * args.aug, p_band=0.2 * args.aug,
-                    p_eq=0.3 * args.aug, p_mulaw=0.1 * args.aug) if args.aug > 0 else None
+                    p_eq=0.3 * args.aug, p_mulaw=0.1 * args.aug,
+                    p_speed=args.aug_speed, p_pitch=args.aug_pitch, p_tempo=args.aug_tempo, p_gain=args.aug_gain,
+                    p_timemask=args.aug_timemask, p_freqmask=args.aug_freqmask, p_clip=args.aug_clip) \
+        if args.aug > 0 else None
 
     ds = CropDataset(items, spk2id, lengths, args.crop_sec)
     dl = torch.utils.data.DataLoader(ds, batch_size=args.bs, sampler=EndlessSampler(items, args.spk_balanced, args.seed),
                                      num_workers=args.workers, drop_last=True, prefetch_factor=4, persistent_workers=True)
     opt = torch.optim.AdamW([
         {"params": [p for p in model.parameters() if p.requires_grad], "lr": args.lr},
-        {"params": head.parameters(), "lr": args.head_lr, "weight_decay": 0.0},
+        {"params": list(head.parameters()) + (list(proj.parameters()) if proj is not None else []),
+         "lr": args.head_lr, "weight_decay": 0.0},
     ], weight_decay=args.wd)
     base_lrs = [g["lr"] for g in opt.param_groups]
 
@@ -299,7 +352,7 @@ def main(argv=None):
     it = iter(dl)
     run = {"loss": 0.0, "acc": 0.0, "kd": 0.0, "n": 0}
     for step in range(start, args.steps + 1):
-        wav, lab = next(it)
+        wav, lab, iidx = next(it)
         wav, lab = wav.to(device, non_blocking=True), lab.to(device, non_blocking=True)
         if args.min_crop_sec:
             n = int(round(random.uniform(args.min_crop_sec, args.crop_sec) * 4)) * 4000  # 0.25 s grid (few cudnn shapes)
@@ -333,6 +386,17 @@ def main(argv=None):
                     r = (s_s - s_t).pow(2).mean()
                     kd = kd + r
                     loss = loss + args.rkd * r
+            if temb is not None:
+                t_full = temb[iidx.to(device)]
+                if args.temb_kd > 0:
+                    k1 = (1 - F.cosine_similarity(proj(emb), t_full, dim=-1)).mean()
+                    kd = kd + k1
+                    loss = loss + args.temb_kd * k1
+                if args.temb_rkd > 0:
+                    e_n = F.normalize(emb)
+                    r = (e_n @ e_n.T - t_full @ t_full.T).pow(2).mean()
+                    kd = kd + r
+                    loss = loss + args.temb_rkd * r
         opt.zero_grad(set_to_none=True)
         scaler.scale(loss).backward()
         scaler.unscale_(opt)
