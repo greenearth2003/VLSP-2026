@@ -94,7 +94,8 @@ class Augmenter:
                  snr_bank=(0, 15),
                  p_speed=0.0, speed_range=(0.9, 1.1), p_pitch=0.0, pitch_range=(-2.0, 2.0),
                  p_tempo=0.0, tempo_range=(0.85, 1.15), p_gain=0.0, gain_db=(-20.0, 10.0),
-                 p_timemask=0.0, timemask=(1, 3, 0.05, 0.25), p_freqmask=0.0, p_clip=0.0, n_groups=4):
+                 p_timemask=0.0, timemask=(1, 3, 0.05, 0.25), p_freqmask=0.0, p_clip=0.0, n_groups=4,
+                 p_overlap=0.0, snr_overlap=(5.0, 15.0), overlap_frac=(0.3, 1.0)):
         self.__dict__.update(locals())
         del self.__dict__["self"]
 
@@ -129,6 +130,22 @@ class Augmenter:
                 else:
                     y = time_stretch(x[sel], float(torch.empty(1).uniform_(*self.tempo_range)))
                 x[sel] = _fit_length(y, T)
+
+        # overlapping secondary speaker (TV-style cross-talk): one other utterance of the batch, quieter than
+        # the main speaker by snr_overlap dB, on a random contiguous stretch of overlap_frac of the crop.
+        # The label stays the main speaker's -> the model learns to follow the dominant voice.
+        m = self._rand(B, dev) < self.p_overlap
+        if m.any():
+            idx = m.nonzero().squeeze(1)
+            other = (idx + torch.randint(1, B, (len(idx),), device=dev)) % B  # never itself
+            for i, j in zip(idx.tolist(), other.tolist()):
+                L = int(T * float(torch.empty(1).uniform_(*self.overlap_frac)))
+                st = int(torch.randint(0, T - L + 1, (1,)))
+                seg = x[i, st:st + L]
+                n = x[j, :L] if x.shape[1] >= L else x[j]
+                snr = float(torch.empty(1).uniform_(*self.snr_overlap))
+                scale = _rms(seg[None]) / (_rms(n[None]) * (10 ** (snr / 20)))
+                x[i, st:st + L] = seg + n * scale[0]
 
         # reverberation first (source in room), then additive noise
         m = self._rand(B, dev) < self.p_reverb

@@ -39,7 +39,7 @@ def main(argv=None):
     ap.add_argument("--trials", default=str(PUBLIC_TRIALS))
     ap.add_argument("--audio-root", default=str(PUBLIC_DIR))
     ap.add_argument("--split", default="public")
-    ap.add_argument("--mode", default="full", choices=["full", "crop", "full+crop", "vad", "dom", "shift"])
+    ap.add_argument("--mode", default="full", choices=["full", "crop", "full+crop", "vad", "dom", "shift", "loud"])
     ap.add_argument("--crop-sec", type=float, default=3.0)
     ap.add_argument("--hop-sec", type=float, default=1.5)
     ap.add_argument("--cohort-per-spk", type=int, default=5)

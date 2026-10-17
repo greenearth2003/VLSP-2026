@@ -29,7 +29,19 @@ EER % (lower is better). full = organisers' 49,993 trials (leaderboard metric); 
 | F + adaptive LMFT stage (L02) + WiSE | 4.81 | 4.50 | 2.87 | 2.83 | 2.81 | 0.27 | 5.81 |
 | F + duration-adaptive margin (K26) + WiSE | 4.81 | 4.52 | 2.91 | 2.89 | 2.89 | 0.27 | 5.90 |
 
-## 3. Other students and the teacher
+## 3. Edge-SV techniques and the two-speaker hypothesis (branch thucth-edge-research)
+
+| system | params_M | full | cleaned | P_dev | P_hold | minDCF | short_lt1s |
+|---|---|---|---|---|---|---|---|
+| F + plain AAM, no sub-centres (E2a) + WiSE | 4.81 | 4.50 | 2.88 | 2.82 | 2.89 | 0.27 | 6.08 |
+| F + SphereFace2-C loss (E2b) + WiSE | 4.81 | 4.48 | 2.76 | 2.89 | 2.67 | 0.25 | 5.79 |
+| F + decoupled logit KD, DKD-gamma (E1a) + WiSE | 4.81 | 4.53 | 2.99 | 2.92 | 3.05 | 0.28 | 5.95 |
+| F + confusion-set logit KD, top-50 (E1b) + WiSE | 4.81 | 4.54 | 3.01 | 2.95 | 3.03 | 0.28 | 5.95 |
+| A: F, keep louder voice at test time (--mode loud) | 4.81 | 4.54 | 2.86 | 2.83 | 2.89 | 0.26 | 5.84 |
+| B: F + quieter overlapping-speaker aug (B01) + WiSE | 4.81 | 4.54 | 2.88 | 2.86 | 2.84 | 0.27 | 6.05 |
+| A+B | 4.81 | 4.57 | 2.86 | 2.93 | 2.84 | 0.26 | 5.87 |
+
+## 4. Other students and the teacher
 
 | system | params_M | full | cleaned | P_dev | P_hold | minDCF | short_lt1s |
 |---|---|---|---|---|---|---|---|

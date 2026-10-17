@@ -189,6 +189,8 @@ def load_model(name: str) -> nn.Module:
 
 def load_finetuned(ckpt: Path) -> nn.Module:
     state = torch.load(ckpt, map_location="cpu", weights_only=False)
+    if state.get("kind") == "fakequant_module":  # whole module saved by scripts/quant_eval.py (static INT8 acts)
+        return state["module"].eval()
     model = load_model(state["base_model"])
     if state.get("prune"):  # structurally pruned checkpoint (sred/prune.py): rebuild the slim architecture first
         from .prune import apply_indices

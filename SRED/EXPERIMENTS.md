@@ -304,3 +304,24 @@ if a second submission is allowed (better minDCF, same full-public EER).
 - **Shifted-segment TTA** (`--mode shift`: full embedding ×2 + 5 windows of 60 % length): 4.56 alone,
   3.89 with smoothing (full+shift average 3.79) → no gain over full-utterance embeddings; TTA is closed
   (fixed-crop TTA also negative, Round 2).
+
+## Round 4 (2026-10-17, branch `thucth-edge-research`): edge-SV research + two-speaker hypothesis
+
+Techniques from `docs/edge_sv_research_1017.md`, each on top of K21 (same recipe/schedule), + WiSE 0.5.
+Full table: `exp/analysis/ablation.md` §3. P(better) vs K21 on P-dev in brackets.
+
+| change | full | cleaned | P-dev | P-hold | verdict |
+|---|---|---|---|---|---|
+| plain AAM, no sub-centres (E2a) | 4.50 | 2.88 | 2.82 | 2.89 | tie (0.68) |
+| **SphereFace2-C** (E2b, m 0.2, s 32) | **4.48** | **2.76** | 2.89 | **2.67** | tie on P-dev (0.45); best cleaned / P-hold / minDCF (0.207 cleaned) of all M students |
+| decoupled logit KD DKD-γ (E1a, teacher C01_B6 head, w 0.3) | 4.53 | 2.99 | 2.92 | 3.05 | no gain on top of embedding KD (0.39) |
+| confusion-set logit KD, top-50 curriculum (E1b, TRKD-like) | 4.54 | 3.01 | 2.95 | 3.03 | no gain (0.38) |
+| QMF + embedding magnitude (E3) | 4.68 | 3.11 | 3.12 | 3.14 | worse — magnitude ≈ speech duration (r = −0.43) |
+| A: keep louder voice at test time (`--mode loud`; cut only if 2 voices, cos < 0.45 and ≥ 6 dB louder) | 4.54 | 2.86 | 2.83 | 2.89 | tie (0.56); cuts ~1 % of clips, 0/36 clips of the mixed-voice folders (those are single-voice clips of another person) |
+| B: overlapping quieter speaker aug (`--aug-overlap 0.3`, 5–15 dB, 30–100 % of crop) | 4.54 | 2.88 | 2.86 | 2.84 | tie (0.46) |
+| A + B | 4.57 | 2.86 | 2.93 | 2.84 | tie |
+| INT8 weights (per-channel PTQ) | 4.49 | — | — | — | free; irrelevant to the parameter-count rule, not pursued |
+
+Conclusion: within-clip two-speaker audio is rare in this data and already tolerated; the speaker-level
+label noise is in the folders, not the clips. The M student is converged at ≈ 2.9 cleaned / 4.5 full.
+SphereFace2 is the only candidate worth a second seed if more model-side work is wanted.

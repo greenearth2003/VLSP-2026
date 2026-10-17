@@ -48,19 +48,23 @@ sp = fp.speech_dur.values
 short = clean & (np.minimum(sp[ia], sp[ib]) < 1)
 
 
-def score(model, backend="qmf", smooth=None):
-    E = l2n(np.load(cache_key(model, "public", files, mode="full")))
+LOUD = dict(mode="loud", crop_sec=3.0, hop_sec=1.5)
+
+
+def score(model, backend="qmf", smooth=None, emb=None):
+    kw = emb or dict(mode="full")
+    E = l2n(np.load(cache_key(model, "public", files, **kw)))
     if smooth:
         E = knn_smooth(E, **smooth)
     if backend == "cosine":
         return np.sum(E[ia] * E[ib], 1)
-    C = l2n(np.load(cache_key(model, "traincohort5", cf, mode="full")))
+    C = l2n(np.load(cache_key(model, "traincohort5", cf, **kw)))
     return QMF2(["dur"]).fit(C, cs, qc).score(E, qp, ia, ib)
 
 
-def row(name, model, backend="qmf", smooth=None, params=4.81):
+def row(name, model, backend="qmf", smooth=None, params=4.81, emb=None):
     try:
-        s = score(model, backend, smooth)
+        s = score(model, backend, smooth, emb)
     except FileNotFoundError:
         return dict(system=name, params_M=params, note="(not run / no cache)")
     return dict(system=name, params_M=params, full=compute_eer(s, y), minDCF=compute_min_dcf(s, y),
@@ -90,6 +94,15 @@ remove = [
     ("F + adaptive LMFT stage (L02) + WiSE", "exp/ft/W_L02_K21_almft/avg.pt", "qmf"),
     ("F + duration-adaptive margin (K26) + WiSE", "exp/ft/W_K26_M/avg.pt", "qmf"),
 ]
+edge = [  # round 4 (branch thucth-edge-research): techniques from docs/edge_sv_research_1017.md
+    ("F + plain AAM, no sub-centres (E2a) + WiSE", "exp/ft/W_E2a_aam1/avg.pt", "qmf"),
+    ("F + SphereFace2-C loss (E2b) + WiSE", "exp/ft/W_E2b_sf2/avg.pt", "qmf"),
+    ("F + decoupled logit KD, DKD-gamma (E1a) + WiSE", "exp/ft/W_E1a_dkd/avg.pt", "qmf"),
+    ("F + confusion-set logit KD, top-50 (E1b) + WiSE", "exp/ft/W_E1b_trkd/avg.pt", "qmf"),
+    ("A: F, keep louder voice at test time (--mode loud)", "exp/ft/W_K21_M/avg.pt", "qmf", None, 4.81, LOUD),
+    ("B: F + quieter overlapping-speaker aug (B01) + WiSE", "exp/ft/W_B01_overlap/avg.pt", "qmf"),
+    ("A+B", "exp/ft/W_B01_overlap/avg.pt", "qmf", None, 4.81, LOUD),
+]
 students = [
     ("ReDimNet-S, same recipe as D (C01_S)", "exp/ft/C01_S/step3000.pt", "qmf", None, 3.15),
     ("ReDimNet2-B4, KD recipe (K30) + WiSE", "exp/ft/W_K30_B4/avg.pt", "qmf", None, 6.66),
@@ -118,7 +131,9 @@ print("## 1. Build-up (each row adds one component)\n")
 print(table([row(*r) for r in build]))
 print("\n## 2. Leave-one-out / variants of the submitted system F\n")
 print(table([row(*r) for r in remove]))
-print("\n## 3. Other students and the teacher\n")
+print("\n## 3. Edge-SV techniques and the two-speaker hypothesis (branch thucth-edge-research)\n")
+print(table([row(*r) for r in edge]))
+print("\n## 4. Other students and the teacher\n")
 print(table([row(n, m, b, s, p) for n, m, b, s, p in students]))
 print("\nAll rows: cosine + QMF(duration) back-end fitted on train-cohort trials (no test labels); WiSE-FT = 0.5 fine-tuned "
       "+ 0.5 pretrained weights. Decisions were made on P-dev (paired speaker bootstrap, accept if P(better) > 0.95); "

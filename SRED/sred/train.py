@@ -42,8 +42,11 @@ class SubCenterAAM(nn.Module):
             w = init.repeat_interleave(k, 0) + 0.01 * torch.randn(n_cls * k, emb_dim)
         self.weight = nn.Parameter(w)
 
+    def class_cos(self, emb):
+        return F.linear(F.normalize(emb), F.normalize(self.weight)).view(-1, self.n_cls, self.k).amax(-1)
+
     def forward(self, emb, label):
-        cos = F.linear(F.normalize(emb), F.normalize(self.weight)).view(-1, self.n_cls, self.k).amax(-1)
+        cos = self.class_cos(emb)
         cos = cos.clamp(-1 + 1e-7, 1 - 1e-7)
         theta = torch.acos(cos)
         target = torch.cos(theta + self.margin)
@@ -57,6 +60,52 @@ class SubCenterAAM(nn.Module):
 
 
 # ----------------------------------------------------------------------------
+class SphereFace2C(nn.Module):
+    """SphereFace2, CosFace-type margin (C), as in WeSpeaker / the ReDimNet recipe: per-class binary
+    (one-vs-all) logistic loss on g(cos) with g(z) = 2((z+1)/2)^t - 1, positive weight lambda."""
+
+    def __init__(self, emb_dim, n_cls, margin=0.2, scale=32.0, lanbuda=0.7, t=3, init: torch.Tensor | None = None):
+        super().__init__()
+        self.n_cls, self.margin, self.scale, self.lanbuda, self.t = n_cls, margin, scale, lanbuda, t
+        w = init.clone() if init is not None else torch.randn(n_cls, emb_dim) * 0.01
+        self.weight = nn.Parameter(w)
+        self.bias = nn.Parameter(torch.zeros(1))
+
+    def class_cos(self, emb):
+        return F.linear(F.normalize(emb), F.normalize(self.weight))
+
+    def forward(self, emb, label):
+        cos = self.class_cos(emb)
+        g = 2 * ((cos + 1) / 2).pow(self.t) - 1
+        pos = self.scale * (g - self.margin) + self.bias
+        neg = self.scale * (g + self.margin) + self.bias
+        onehot = F.one_hot(label, self.n_cls).float()
+        loss = (onehot * self.lanbuda * F.softplus(-pos) + (1 - onehot) * (1 - self.lanbuda) * F.softplus(neg)).sum(1).mean()
+        acc = (cos.argmax(-1) == label).float().mean()
+        return loss, acc
+
+
+def dkd_loss(s_logit, t_logit, label, alpha=1.0, gamma=2.0, T=4.0, conf_k=0):
+    """Decoupled KD (target-class KD + gamma * non-target-class KD). conf_k > 0 restricts the non-target
+    distribution to the teacher's top-conf_k non-target classes (confusion set, cf. TRKD)."""
+    n = s_logit.shape[1]
+    onehot = F.one_hot(label, n).bool()
+    ps, pt = F.softmax(s_logit / T, 1), F.softmax(t_logit / T, 1)
+    bs = torch.stack([(ps * onehot).sum(1), (ps * ~onehot).sum(1)], 1).clamp_min(1e-8)
+    bt = torch.stack([(pt * onehot).sum(1), (pt * ~onehot).sum(1)], 1).clamp_min(1e-8)
+    tckd = (bt * (bt.log() - bs.log())).sum(1).mean()
+    mask = ~onehot
+    if conf_k and conf_k < n - 1:
+        tl = t_logit.masked_fill(onehot, -1e9)
+        idx = tl.topk(conf_k, 1).indices
+        mask = torch.zeros_like(onehot).scatter_(1, idx, True)
+    big = -1e9
+    ls = F.log_softmax((s_logit / T).masked_fill(~mask, big), 1)
+    lt = F.log_softmax((t_logit / T).masked_fill(~mask, big), 1)
+    nckd = (lt.exp() * (lt - ls)).masked_fill(~mask, 0).sum(1).mean()
+    return (alpha * tckd + gamma * nckd) * T * T
+
+
 def train_lengths(items, cache=ROOT / "lists/train_lengths.json"):
     if cache.exists():
         return json.loads(cache.read_text())
@@ -177,6 +226,14 @@ def main(argv=None):
     ap.add_argument("--margin", type=float, default=0.2)
     ap.add_argument("--scale", type=float, default=30.0)
     ap.add_argument("--subcenters", type=int, default=3)
+    ap.add_argument("--loss", default="aam", choices=["aam", "sf2"], help="aam = sub-center AAM; sf2 = SphereFace2-C")
+    ap.add_argument("--tlogits", default=None, help="cached teacher class cosines (.npy [N_train_txt, n_cls], float16)")
+    ap.add_argument("--dkd", type=float, default=0.0, help="weight of decoupled logit KD vs --tlogits")
+    ap.add_argument("--dkd-gamma", type=float, default=2.0)
+    ap.add_argument("--dkd-T", type=float, default=4.0)
+    ap.add_argument("--dkd-scale", type=float, default=30.0, help="logit = scale * cosine (student and teacher)")
+    ap.add_argument("--dkd-conf-k", type=int, default=0,
+                    help="confusion-set size at the END of training (0 = all classes); curriculum from all -> k")
     ap.add_argument("--margin-min-frac", type=float, default=1.0,
                     help="duration-adaptive margin: margin * lerp(min_frac..1) as the crop goes min-crop-sec..crop-sec "
                          "(short/low-quality crops get a smaller margin, cf. AdaFace / Adaptive Margin Circle Loss)")
@@ -185,6 +242,8 @@ def main(argv=None):
                  ("tempo", "tempo 0.85-1.15, pitch kept"), ("gain", "level -20..+10 dB"),
                  ("timemask", "zero 1-3 chunks"), ("freqmask", "1-2 band-stops"), ("clip", "hard clipping")):
         ap.add_argument(f"--aug-{k}", type=float, default=0.0, help=f"prob of {h} (default off)")
+    ap.add_argument("--aug-overlap", type=float, default=0.0,
+                    help="prob of mixing a quieter second speaker (5-15 dB below) over 30-100%% of the crop")
     ap.add_argument("--kd", type=float, default=0.0, help="weight of clean->aug consistency KD to frozen base")
     ap.add_argument("--teacher", default=None, help="registry name of an external frozen teacher (e.g. B6)")
     ap.add_argument("--rkd", type=float, default=0.0, help="weight of relational KD (batch similarity matrix)")
@@ -278,8 +337,11 @@ def main(argv=None):
     with torch.no_grad():
         emb_dim = model(torch.zeros(1, 32000, device=device)).shape[-1]
     model.train()
-    head = SubCenterAAM(emb_dim, len(spks), k=args.subcenters, margin=args.margin, scale=args.scale,
-                        init=init).to(device)
+    if args.loss == "sf2":
+        head = SphereFace2C(emb_dim, len(spks), margin=args.margin, scale=args.scale, init=init).to(device)
+    else:
+        head = SubCenterAAM(emb_dim, len(spks), k=args.subcenters, margin=args.margin, scale=args.scale,
+                            init=init).to(device)
     if init_state is not None and "head" in init_state and init_state["head"]["weight"].shape == head.weight.shape:
         head.load_state_dict(init_state["head"])
         P("head loaded from init ckpt")
@@ -310,10 +372,20 @@ def main(argv=None):
         P(f"long->short KD from cached teacher {args.teacher_emb} dim={temb.shape[1]} "
           f"kd={args.temb_kd} rkd={args.temb_rkd}")
 
+    tlog = None
+    if args.tlogits and args.dkd > 0:
+        all_rels = [r for _, r in read_train_list()]
+        row = {r: i for i, r in enumerate(all_rels)}
+        TL = np.load(args.tlogits, mmap_mode="r")
+        assert TL.shape[0] == len(all_rels) and TL.shape[1] == len(spks), (TL.shape, len(all_rels), len(spks))
+        tlog = torch.from_numpy(np.ascontiguousarray(TL[[row[r] for _, r in items]])).to(device)  # float16
+        P(f"decoupled logit KD from {args.tlogits} w={args.dkd} gamma={args.dkd_gamma} T={args.dkd_T} conf_k={args.dkd_conf_k}")
+
     aug = Augmenter(p_noise=0.6 * args.aug, p_reverb=0.3 * args.aug, p_band=0.2 * args.aug,
                     p_eq=0.3 * args.aug, p_mulaw=0.1 * args.aug,
                     p_speed=args.aug_speed, p_pitch=args.aug_pitch, p_tempo=args.aug_tempo, p_gain=args.aug_gain,
-                    p_timemask=args.aug_timemask, p_freqmask=args.aug_freqmask, p_clip=args.aug_clip) \
+                    p_timemask=args.aug_timemask, p_freqmask=args.aug_freqmask, p_clip=args.aug_clip,
+                    p_overlap=args.aug_overlap) \
         if args.aug > 0 else None
 
     ds = CropDataset(items, spk2id, lengths, args.crop_sec)
@@ -392,6 +464,14 @@ def main(argv=None):
                     r = (s_s - s_t).pow(2).mean()
                     kd = kd + r
                     loss = loss + args.rkd * r
+            if tlog is not None:
+                prog = step / args.steps
+                k_now = 0 if args.dkd_conf_k <= 0 else int(round(len(spks) - (len(spks) - args.dkd_conf_k) * min(1.0, prog / 0.7)))
+                s_logit = args.dkd_scale * head.class_cos(emb)
+                t_logit = args.dkd_scale * tlog[iidx.to(device)].float()
+                k2 = dkd_loss(s_logit, t_logit, lab, gamma=args.dkd_gamma, T=args.dkd_T, conf_k=k_now)
+                kd = kd + k2
+                loss = loss + args.dkd * k2
             if temb is not None:
                 t_full = temb[iidx.to(device)]
                 if args.temb_kd > 0:

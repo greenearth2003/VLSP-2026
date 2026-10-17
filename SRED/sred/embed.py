@@ -79,6 +79,46 @@ def dominant_speaker_wav(model, wav: torch.Tensor, win_sec: float = 1.0, min_tot
 
 
 @torch.inference_mode()
+def loudest_speaker_wav(model, wav: torch.Tensor, win_sec: float = 1.0, hop_sec: float = 0.5, min_total_sec: float = 3.0,
+                        split_cos: float = 0.45, min_db_gap: float = 6.0, min_minor_win: int = 2):
+    """Keep only the LOUDER of two voices in a clip. VAD-trim, windows of win_sec (hop hop_sec), embed each window,
+    2-means on cosine. Cut only if the two clusters are clearly different voices (centroid cosine < split_cos) AND
+    one is clearly louder (median window RMS gap >= min_db_gap). Returns (wav, cut_flag)."""
+    sr = 16000
+    w = vad_trim(wav)
+    win, hop = int(win_sec * sr), int(hop_sec * sr)
+    if w.shape[-1] < int(min_total_sec * sr):
+        return w, False
+    segs = w.unfold(0, win, hop)  # [n, win]
+    n = segs.shape[0]
+    if n < 4:
+        return w, False
+    e = F.normalize(model(segs), dim=-1)
+    db = 10 * torch.log10(segs.pow(2).mean(1) + 1e-10)
+    i, j = divmod(int(torch.argmin(e @ e.T)), n)
+    cent = torch.stack([e[i], e[j]])
+    for _ in range(10):
+        a = (e @ cent.T).argmax(1)
+        if a.min() == a.max():
+            return w, False
+        cent = F.normalize(torch.stack([e[a == k].mean(0) for k in (0, 1)]), dim=-1)
+    a = (e @ cent.T).argmax(1)
+    n0 = int((a == 0).sum())
+    if min(n0, n - n0) < min_minor_win or float(cent[0] @ cent[1]) >= split_cos:
+        return w, False
+    l0, l1 = float(db[a == 0].median()), float(db[a == 1].median())
+    if abs(l0 - l1) < min_db_gap:
+        return w, False
+    keep = 0 if l0 > l1 else 1
+    # rebuild audio from the kept windows (hop-sized hops, no duplicated samples)
+    mask = torch.zeros(w.shape[-1], dtype=torch.bool, device=w.device)
+    for k in torch.nonzero(a == keep).squeeze(1).tolist():
+        mask[k * hop: k * hop + win] = True
+    out = w[mask]
+    return (out, True) if out.shape[-1] >= sr else (w, False)
+
+
+@torch.inference_mode()
 def embed_shift(model, wav: torch.Tensor, frac: float = 0.6, n_shift: int = 5, min_win_sec: float = 3.0,
                 full_weight: float = 2.0, min_sec: float = 0.5, max_sec: float = 60.0) -> torch.Tensor:
     sr = 16000
@@ -112,6 +152,10 @@ def embed_wav(model, wav: torch.Tensor, mode: str = "full", crop_sec: float = 3.
       dom        - full, after dominant-speaker extraction
     """
     sr = 16000
+    if mode == "loud":
+        wav, mode = loudest_speaker_wav(model, wav)[0], "full"
+    if mode == "raw":  # un-normalised full-utterance embedding (its norm is a quality measure)
+        return model(wav[: int(max_sec * 16000)][None])[0]
     if mode == "shift":
         return embed_shift(model, wav, min_sec=min_sec, max_sec=max_sec)
     if mode == "vad":
