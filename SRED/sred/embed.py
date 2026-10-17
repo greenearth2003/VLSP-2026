@@ -79,6 +79,25 @@ def dominant_speaker_wav(model, wav: torch.Tensor, win_sec: float = 1.0, min_tot
 
 
 @torch.inference_mode()
+def embed_shift(model, wav: torch.Tensor, frac: float = 0.6, n_shift: int = 5, min_win_sec: float = 3.0,
+                full_weight: float = 2.0, min_sec: float = 0.5, max_sec: float = 60.0) -> torch.Tensor:
+    sr = 16000
+    wav = wav[: int(max_sec * sr)]
+    if wav.shape[-1] < int(min_sec * sr):
+        reps = int(np.ceil(min_sec * sr / max(1, wav.shape[-1])))
+        wav = wav.repeat(reps)[: int(min_sec * sr)]
+    T = wav.shape[-1]
+    e_full = F.normalize(model(wav[None]), dim=-1)[0]
+    L = int(max(min_win_sec * sr, frac * T))
+    if L >= T:
+        return e_full
+    starts = np.linspace(0, T - L, n_shift).astype(int)
+    segs = torch.stack([wav[s:s + L] for s in starts])
+    e_seg = F.normalize(model(segs), dim=-1)
+    return F.normalize(full_weight * e_full + e_seg.sum(0), dim=-1)
+
+
+@torch.inference_mode()
 def embed_wav(model, wav: torch.Tensor, mode: str = "full", crop_sec: float = 3.0,
               hop_sec: float = 1.5, min_sec: float = 0.5, max_sec: float = 60.0) -> torch.Tensor:
     """wav: 1-D tensor on device. Returns an un-normalised embedding [D].
@@ -88,8 +107,13 @@ def embed_wav(model, wav: torch.Tensor, mode: str = "full", crop_sec: float = 3.
       crop       - mean of L2-normalised embeddings of overlapping crops
       full+crop  - mean of normalised full embedding and normalised crop mean
       vad        - full, after energy-VAD silence removal (vad_trim)
+      shift      - TTA with long shifted segments: full embedding (weight 2) + `n_shift` windows of length
+                   max(min_win_sec, frac*T) evenly shifted across the utterance, all L2-normalised, averaged
+      dom        - full, after dominant-speaker extraction
     """
     sr = 16000
+    if mode == "shift":
+        return embed_shift(model, wav, min_sec=min_sec, max_sec=max_sec)
     if mode == "vad":
         wav, mode = vad_trim(wav), "full"
     elif mode == "dom":

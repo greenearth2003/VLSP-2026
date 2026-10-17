@@ -290,3 +290,17 @@ Conclusion: with the approved ≤ 7M checkpoints and this data the recipe is con
 4.5 full; label noise bounds full-public EER from below at ≈ 1.4, and < 3.0 would need ≈ 1.1 cleaned
 (half the 12.5M teacher's error). L02-WiSE (`exp/ft/W_L02_K21_almft/avg.pt`) is the preferred tie-breaker
 if a second submission is allowed (better minDCF, same full-public EER).
+
+## Round 3 (2026-10-17): transductive test-set smoothing; shifted-segment TTA
+
+- **kNN smoothing of test embeddings** (`sred/transductive.py`, `scripts/score_transductive.py`): each test
+  embedding += w · similarity-weighted mean of its k nearest other test files (cosine ≥ tau), 2 passes.
+  Selected on P-dev: k 20, w 0.5, tau 0.6 → **full 3.78 / cleaned 1.54 / P-dev 1.81 / P-hold 1.36**
+  (K21 alone 4.50 / 2.92 / 2.95 / 2.86). Conservative tau 0.7, w 1.0: 3.96, minDCF 0.148.
+  Uses unlabelled test audio only (rules to be confirmed). Gain depends on utterances-per-speaker: on a
+  ≤3-files-per-speaker stress set every setting *hurts* (+0.2…+0.8). Diagnostic printed by the script:
+  share of files with ≥3 neighbours above tau — public 94 %, stress sets ≤3 %; do not smooth below ~50 %.
+  Test-domain centering (4.84), test whitening (14.8) and test-cohort AS-norm (5.7–7.3) all hurt.
+- **Shifted-segment TTA** (`--mode shift`: full embedding ×2 + 5 windows of 60 % length): 4.56 alone,
+  3.89 with smoothing (full+shift average 3.79) → no gain over full-utterance embeddings; TTA is closed
+  (fixed-crop TTA also negative, Round 2).
