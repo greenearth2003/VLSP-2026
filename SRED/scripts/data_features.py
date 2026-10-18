@@ -101,6 +101,10 @@ def main():
     jobs = []
     if "train" in a.splits:
         jobs += [("train", str(TRAIN_DIR), rel) for _, rel in read_train_list()]
+    if "private" in a.splits:
+        from sred.data import DATA_ROOT
+        pt = DATA_ROOT / "private_test/private-test.txt"
+        jobs += [("private", str(DATA_ROOT / "private_test/data"), f) for f in unique_files(read_trials(pt)[0])]
     if "public" in a.splits:
         jobs += [("public", str(PUBLIC_DIR), f) for f in unique_files(read_trials()[0])]
     if a.limit:

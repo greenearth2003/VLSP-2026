@@ -242,6 +242,14 @@ def main(argv=None):
                  ("tempo", "tempo 0.85-1.15, pitch kept"), ("gain", "level -20..+10 dB"),
                  ("timemask", "zero 1-3 chunks"), ("freqmask", "1-2 band-stops"), ("clip", "hard clipping")):
         ap.add_argument(f"--aug-{k}", type=float, default=0.0, help=f"prob of {h} (default off)")
+    ap.add_argument("--aug-noise-p", type=float, default=0.6, help="prob of additive noise (babble or coloured)")
+    ap.add_argument("--aug-noise-snr", default="5,20", help="coloured-noise SNR range in dB, e.g. 0,15")
+    ap.add_argument("--aug-babble-snr", default="13,20", help="babble SNR range in dB")
+    ap.add_argument("--aug-noise-beta", default="0,2", help="1/f^beta exponent range; negative = hiss-like")
+    ap.add_argument("--aug-matched", type=float, default=0.0, help="prob of matched noise (lists/matched_noise.npz)")
+    ap.add_argument("--aug-matched-end", type=float, default=None, help="curriculum: linearly ramp the prob to this value")
+    ap.add_argument("--aug-matched-shift", type=float, default=0.0, help="dB added to the sampled SNR (negative = harder)")
+    ap.add_argument("--aug-matched-hiss", type=float, default=0.2, help="share of matched noise that is hiss")
     ap.add_argument("--aug-overlap", type=float, default=0.0,
                     help="prob of mixing a quieter second speaker (5-15 dB below) over 30-100%% of the crop")
     ap.add_argument("--kd", type=float, default=0.0, help="weight of clean->aug consistency KD to frozen base")
@@ -381,11 +389,15 @@ def main(argv=None):
         tlog = torch.from_numpy(np.ascontiguousarray(TL[[row[r] for _, r in items]])).to(device)  # float16
         P(f"decoupled logit KD from {args.tlogits} w={args.dkd} gamma={args.dkd_gamma} T={args.dkd_T} conf_k={args.dkd_conf_k}")
 
-    aug = Augmenter(p_noise=0.6 * args.aug, p_reverb=0.3 * args.aug, p_band=0.2 * args.aug,
+    _rng = lambda v: tuple(float(x) for x in v.split(","))  # noqa: E731
+    aug = Augmenter(p_noise=args.aug_noise_p * args.aug, snr_noise=_rng(args.aug_noise_snr),
+                    snr_babble=_rng(args.aug_babble_snr), noise_beta=_rng(args.aug_noise_beta), p_reverb=0.3 * args.aug, p_band=0.2 * args.aug,
                     p_eq=0.3 * args.aug, p_mulaw=0.1 * args.aug,
                     p_speed=args.aug_speed, p_pitch=args.aug_pitch, p_tempo=args.aug_tempo, p_gain=args.aug_gain,
                     p_timemask=args.aug_timemask, p_freqmask=args.aug_freqmask, p_clip=args.aug_clip,
-                    p_overlap=args.aug_overlap) \
+                    p_overlap=args.aug_overlap, p_matched=args.aug_matched,
+                    matched=dict(np.load(ROOT / "lists/matched_noise.npz")) if args.aug_matched > 0 else None,
+                    matched_snr_shift=args.aug_matched_shift, matched_hiss_frac=args.aug_matched_hiss) \
         if args.aug > 0 else None
 
     ds = CropDataset(items, spk2id, lengths, args.crop_sec)
@@ -436,6 +448,8 @@ def main(argv=None):
         if args.margin_min_frac < 1.0 and args.min_crop_sec:
             frac = (wav.shape[1] / 16000 - args.min_crop_sec) / max(1e-6, args.crop_sec - args.min_crop_sec)
             head.margin = args.margin * (args.margin_min_frac + (1 - args.margin_min_frac) * min(1.0, max(0.0, frac)))
+        if aug is not None and args.aug_matched_end is not None:
+            aug.p_matched = args.aug_matched + (args.aug_matched_end - args.aug_matched) * min(1.0, step / args.steps)
         clean = wav
         if aug is not None:
             wav = aug(wav)

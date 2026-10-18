@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 import torchaudio.functional as AF  # mu-law
@@ -95,7 +96,8 @@ class Augmenter:
                  p_speed=0.0, speed_range=(0.9, 1.1), p_pitch=0.0, pitch_range=(-2.0, 2.0),
                  p_tempo=0.0, tempo_range=(0.85, 1.15), p_gain=0.0, gain_db=(-20.0, 10.0),
                  p_timemask=0.0, timemask=(1, 3, 0.05, 0.25), p_freqmask=0.0, p_clip=0.0, n_groups=4,
-                 p_overlap=0.0, snr_overlap=(5.0, 15.0), overlap_frac=(0.3, 1.0)):
+                 p_overlap=0.0, snr_overlap=(5.0, 15.0), overlap_frac=(0.3, 1.0), noise_beta=(0.0, 2.0),
+                 p_matched=0.0, matched: dict | None = None, matched_snr_shift=0.0, matched_hiss_frac=0.2):
         self.__dict__.update(locals())
         del self.__dict__["self"]
 
@@ -130,6 +132,28 @@ class Augmenter:
                 else:
                     y = time_stretch(x[sel], float(torch.empty(1).uniform_(*self.tempo_range)))
                 x[sel] = _fit_length(y, T)
+
+        # matched noise: Gaussian noise coloured by measured noise spectra (average background or hiss), slow
+        # +-4 dB level fluctuation, SNR drawn from an empirical SNR distribution (+ shift; negative = harder)
+        if self.p_matched > 0 and self.matched is not None:
+            m = self._rand(B, dev) < self.p_matched
+            if m.any():
+                idx = m.nonzero().squeeze(1)
+                f = torch.fft.rfftfreq(T, 1 / SR).to(dev)
+                fz = torch.as_tensor(self.matched["freqs"], device=dev, dtype=torch.float32)
+                g_avg = torch.sqrt(torch.as_tensor(np.interp(f.cpu().numpy(), self.matched["freqs"], self.matched["avg"]), device=dev, dtype=torch.float32))
+                g_hiss = torch.sqrt(torch.as_tensor(np.interp(f.cpu().numpy(), self.matched["freqs"], self.matched["hiss"]), device=dev, dtype=torch.float32))
+                use_hiss = (torch.rand(len(idx), device=dev) < self.matched_hiss_frac)[:, None]
+                g = torch.where(use_hiss, g_hiss[None], g_avg[None])
+                spec = torch.randn(len(idx), f.numel(), dtype=torch.cfloat, device=dev) * g
+                n = torch.fft.irfft(spec, n=T)
+                t = torch.arange(T, device=dev).float() / SR
+                fr = torch.empty(len(idx), 1, device=dev).uniform_(0.3, 2.0)
+                ph = torch.empty(len(idx), 1, device=dev).uniform_(0, 6.283)
+                n = n * 10 ** (4 * torch.sin(2 * math.pi * fr * t[None] + ph) / 20)
+                snrs = torch.as_tensor(np.random.choice(self.matched["snr"], len(idx)), device=dev, dtype=torch.float32)
+                snr = (snrs + self.matched_snr_shift).clamp(-5, 40)[:, None]
+                x[idx] = _mix_at_snr(x[idx], n, snr)
 
         # overlapping secondary speaker (TV-style cross-talk): one other utterance of the batch, quieter than
         # the main speaker by snr_overlap dB, on a random contiguous stretch of overlap_frac of the crop.
@@ -169,7 +193,7 @@ class Augmenter:
                         n += x[perm] / _rms(x[perm])
                     snr = torch.empty(len(sel), 1, device=dev).uniform_(*self.snr_babble)
                 elif k == 1:  # coloured noise
-                    beta = float(torch.empty(1).uniform_(0, 2))
+                    beta = float(torch.empty(1).uniform_(*self.noise_beta))  # <0: blue / hiss-like
                     n = coloured_noise((len(sel), T), dev, beta)
                     snr = torch.empty(len(sel), 1, device=dev).uniform_(*self.snr_noise)
                 else:  # real noise bank
