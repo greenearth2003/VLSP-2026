@@ -1,7 +1,7 @@
 """Score a trial list with the final model + transductive kNN smoothing of the test embeddings + QMF.
 
     python scripts/score_transductive.py --trials T.txt --audio-root DIR --split NAME --out results.txt \
-        [--model exp/ft/W_K21_M/avg.pt] [--k 20 --w 0.5 --tau 0.6 --iters 2]
+        [--model exp/ft/W_K21_M/avg.pt] [--transductive [--k 20 --w 0.5 --tau 0.6 --iters 2 --min-cluster 3]]
 
 Prints a redundancy diagnostic first: the share of test files that have >= 1 / >= 3 other files above
 `tau` cosine. On the public test this is high (many utterances per speaker); if the private set shows a
@@ -51,7 +51,10 @@ def main():
     ap.add_argument("--w", type=float, default=0.5)
     ap.add_argument("--tau", type=float, default=0.6)
     ap.add_argument("--iters", type=int, default=2)
-    ap.add_argument("--no-smooth", action="store_true")
+    ap.add_argument("--transductive", action="store_true",
+                    help="enable transductive kNN smoothing of the test embeddings (default: off)")
+    ap.add_argument("--min-cluster", type=int, default=3,
+                    help="smooth a file only if it forms a cluster of >= this many points with its neighbours")
     a = ap.parse_args()
 
     pairs, labels = read_trials(Path(a.trials))
@@ -70,11 +73,14 @@ def main():
     r1, r3 = redundancy(E, a.tau)
     print(f"redundancy @tau={a.tau}: {r1:.1%} of files have >=1 neighbour, {r3:.1%} have >=3  "
           f"(public test @0.6: 97.5% / 94.2%; stress sets with <=3 / <=2 files per speaker: 87% / 3% and 75% / 0.2% -> use the >=3 share: below ~50% do NOT smooth)")
-    if not a.no_smooth:
-        E = knn_smooth(E, a.k, a.w, a.tau, a.iters)
+    if a.transductive:
+        E, mask = knn_smooth(E, a.k, a.w, a.tau, a.iters, min_cluster=a.min_cluster, return_mask=True)
+        print(f"transductive smoothing ON: {mask.mean():.1%} of files were in clusters of >= {a.min_cluster} and got smoothed")
+    else:
+        print("transductive smoothing OFF")
     s = QMF2(["dur"]).fit(C, cs, {"dur": cdur}).score(E, {"dur": dur}, ia, ib)
     write_submission(Path(a.out), pairs, s)
-    print(f"wrote {a.out}  ({len(pairs)} trials; smoothing={'off' if a.no_smooth else f'k={a.k} w={a.w} tau={a.tau} iters={a.iters}'})")
+    print(f"wrote {a.out}  ({len(pairs)} trials; smoothing={f'k={a.k} w={a.w} tau={a.tau} iters={a.iters} min_cluster={a.min_cluster}' if a.transductive else 'off'})")
     if labels is not None:
         print(f"EER on this list: {compute_eer(s, labels):.3f}")
 

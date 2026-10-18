@@ -2,6 +2,8 @@
 # Final system -> leaderboard zip, for the private test (or any trial list).
 #
 #   scripts/make_final_submission.sh <trial_list> <audio_root> <zip_name> [split_name]
+#   TRANSDUCTIVE=1 scripts/make_final_submission.sh ...   # enable transductive kNN smoothing (default off;
+#        only files in clusters of >= MIN_CLUSTER (default 3) test files are smoothed; check the rules first)
 #
 #   e.g. scripts/make_final_submission.sh $SRED_DATA/private_test/private-test.txt \
 #            $SRED_DATA/private_test/data result-private-1020.zip private
@@ -33,8 +35,13 @@ echo "trials: $n   missing audio files: $missing"
 [ "$missing" -eq 0 ] || { echo "abort: audio files missing"; exit 1; }
 rm -f "lists/${SPLIT}_durations.npy"   # duration cache is keyed by split name only
 
-.venv/bin/python -m sred.evaluate --model "$MODEL" --trials "$OUT/trials_2col.txt" --audio-root "$AUDIO" \
-  --split "$SPLIT" --submission "$OUT/results.txt" --submission-backend "$BACKEND" --tag "final_$SPLIT"
+if [ "${TRANSDUCTIVE:-0}" = "1" ]; then
+  .venv/bin/python scripts/score_transductive.py --model "$MODEL" --trials "$OUT/trials_2col.txt" --audio-root "$AUDIO" \
+    --split "$SPLIT" --out "$OUT/results.txt" --transductive --min-cluster "${MIN_CLUSTER:-3}"
+else
+  .venv/bin/python -m sred.evaluate --model "$MODEL" --trials "$OUT/trials_2col.txt" --audio-root "$AUDIO" \
+    --split "$SPLIT" --submission "$OUT/results.txt" --submission-backend "$BACKEND" --tag "final_$SPLIT"
+fi
 
 # checks: same pairs in the same order, 3 fields, finite numeric scores
 bad_order=$(paste -d' ' <(cut -d' ' -f1,2 "$OUT/results.txt") "$OUT/trials_2col.txt" | awk '$1!=$3||$2!=$4{b++} END{print b+0}')
