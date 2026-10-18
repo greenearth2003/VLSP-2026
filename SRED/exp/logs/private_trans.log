@@ -1,0 +1,13 @@
+trials: 278410   missing audio files: 0
+redundancy @tau=0.6: 96.0% of files have >=1 neighbour, 91.2% have >=3  (public test @0.6: 97.5% / 94.2%; stress sets with <=3 / <=2 files per speaker: 87% / 3% and 75% / 0.2% -> use the >=3 share: below ~50% do NOT smooth)
+transductive smoothing ON: 95.0% of files were in clusters of >= 3 and got smoothed
+wrote submissions/final_private/results.txt  (278410 trials; smoothing=k=20 w=0.5 tau=0.6 iters=2 min_cluster=3)
+lines: 278410 / 278410   mismatched pairs: 0   bad score lines: 0
+Archive:  submissions/final_private/result-private-trans.zip
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+ 12127813  2026-10-18 02:50   results.txt
+---------                     -------
+ 12127813                     1 file
+ready: submissions/final_private/result-private-trans.zip
+ALLDONE

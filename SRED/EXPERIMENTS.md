@@ -325,3 +325,16 @@ Full table: `exp/analysis/ablation.md` §3. P(better) vs K21 on P-dev in bracket
 Conclusion: within-clip two-speaker audio is rare in this data and already tolerated; the speaker-level
 label noise is in the folders, not the clips. The M student is converged at ≈ 2.9 cleaned / 4.5 full.
 SphereFace2 is the only candidate worth a second seed if more model-side work is wanted.
+
+## Private test inference (2026-10-18, branch `thucth-private-test`)
+
+Data: `gs://cake-ds-intern/VLSP-2026/SRED/Dataset/Vi-SRED26-PrivateTest.zip` (MD5/CRC32C verified, extracted to
+`data/Vi-SRED26/private_test/`, zip deleted): 278,410 unlabelled trials, 37,354 files, 1,868 folders.
+Model K21 (`exp/ft/W_K21_M/avg.pt`), cosine + QMF(dur). Run: `exp/logs/run_private.sh`.
+
+| zip (`submissions/final_private/`) | mode | notes |
+|---|---|---|
+| `result-private-nontrans.zip` | `TRANSDUCTIVE=0` | public equivalent: 4.50 EER |
+| `result-private-trans.zip` | `TRANSDUCTIVE=1` (k 20, w 0.5, tau 0.6, 2 passes, min_cluster 3) | public equivalent: 3.79 EER. Private redundancy 91.2 % of files with ≥ 3 neighbours (public 94.2 %; stress sets ≤ 3 %) → expected to help; 95.0 % of files smoothed. Use only if the rules allow unlabelled test audio. |
+
+Both: 278,410 lines in trial order, `file1 file2 score`, format checks passed.
