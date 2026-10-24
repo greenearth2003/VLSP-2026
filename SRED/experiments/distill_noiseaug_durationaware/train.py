@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import random
 import subprocess
 import sys
@@ -193,6 +194,16 @@ def main(argv=None):
     S = dcfg["speakers_per_step"]
     max_audio = cfg["max_chunk_audio_s"]
     last = cfg["steps"] if not a.max_steps else min(cfg["steps"], a.max_steps)
+    wb = None
+    if os.environ.get("DND_WANDB"):  # opt-in live logging: same run ids and keys as wandb_sync.py; never stops training
+        try:
+            import wandb
+            wb = wandb.init(project=os.environ["DND_WANDB"], id=f"dnd-{a.name}", name=a.name, resume="allow",
+                            group="distill-noiseaug-durationaware", config={"train": cfg, "data": dcfg, "git": git_commit()})
+            P(f"W&B: {wb.url}")
+        except Exception as e:  # no credentials / no network: keep training, log.txt still has everything
+            P(f"W&B disabled: {e}")
+            wb = None
     run = {"loss": 0.0, "n": 0, "t0": time.time(), "per": {}, "kd": {}}
     it = iter(loader)
     for step in range(start, last + 1):
@@ -247,6 +258,18 @@ def main(argv=None):
               f"margin_x={objective.margin_scale(p):.2f} lr={opt.param_groups[0]['lr']:.2e} "
               f"bins={b['bins'][0]:g}/{b['bins'][1]:g}s {(time.time() - run['t0']) / n:.2f}s/step "
               f"mem={torch.cuda.max_memory_allocated() / 2 ** 30:.1f}G")
+            if wb is not None:
+                d = {"train/loss": run["loss"] / n, "alpha": objective.alpha(p), "margin_scale": objective.margin_scale(p),
+                     "lr": opt.param_groups[0]["lr"], "bins/short_s": b["bins"][0], "bins/long_s": b["bins"][1],
+                     "sec_per_step": (time.time() - run["t0"]) / n, "gpu_mem_gb": torch.cuda.max_memory_allocated() / 2 ** 30,
+                     "heads_only": int(head_only)}
+                for (vw, dim), (ls, h, k) in run["per"].items():
+                    d[f"train/{vw}{dim}_loss"], d[f"train/{vw}{dim}_acc"] = ls / k, h / k
+                d.update({f"train/kd_{k_}": x_ / n for k_, x_ in run["kd"].items()})
+                try:
+                    wb.log(d, step=step)
+                except Exception as e:
+                    P(f"W&B log failed at step {step}: {e}")
             run = {"loss": 0.0, "n": 0, "t0": time.time(), "per": {}, "kd": {}}
         if step % cfg["save_every"] == 0 or step == last:
             sd = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
@@ -256,6 +279,8 @@ def main(argv=None):
                         "kd_proj": kd.proj.state_dict() if kd is not None else None,
                         "opt": opt.state_dict(), "step": step, "config": cfg}, out / "last.tmp")
             (out / "last.tmp").replace(out / "last.pt")
+    if wb is not None:
+        wb.finish()
     P("done", out)
 
 
