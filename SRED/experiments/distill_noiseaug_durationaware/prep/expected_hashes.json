@@ -1,5 +1,6 @@
 {
   "manifest.jsonl": "3e812ab8d273eb7a",
+  "train_audio.sha256": "cf7abbdb4a4c7a90",
   "crop_bank.npz": "3a3499fbd42c2a78",
   "lists/rir_bank.npz": "32dd50b5dfb45f0c",
   "lists/musan_bank.npz": "dc585c4c1a7b8001",

@@ -24,6 +24,15 @@ by one crop silently mismatches every teacher target. `prep/verify_artifacts.py`
 
 `REF=<user>@<reference host>` and `R=/mnt/tsharp/thucth/dataset/vlsp2026-sred/VLSP-2026/SRED` below.
 
+**0. Requirements.**
+
+| Resource | Need |
+|---|---|
+| disk | ≈ 50 GB free: train zip 14.6 GB (delete after step 2) + train audio 16 GB + HF inputs 3.4 GB + teacher caches ≈ 0.7 GB + ≈ 0.4 GB per run; step 4 fails below 10 GB free |
+| GPU | ≥ 20 GB (B4 at 32 speakers × 6 s long view, in two halves: ≈ 11 GB; WavLM-Large caching ≈ 5 GB) |
+| CPU / disk speed | loader needs ≥ 0.7 steps/s; 8 workers gave 5.3 steps/s on the reference server |
+| HF access | token with read access to `thucth/edge-device-speaker-recognition` (train zip) and `pieceofcakee/vlsp2026` |
+
 **1. Code.**
 
 ```bash
@@ -32,8 +41,20 @@ git checkout thucth-distill-noiseaug-durationaware
 cd SRED && uv sync            # or reuse a .venv with torch 2.5 + torchaudio 2.5 (cu124), numpy, scipy, soundfile, pandas
 ```
 
-**2. Train audio.** Only `Vi-SRED26/train` is needed. Put it at `SRED/data/Vi-SRED26/train/{data,train.txt}` or
-export `SRED_DATA=/path/to/Vi-SRED26` before `source env.sh`.
+**2. Train audio: the original competition zip, nothing else.** Only `Vi-SRED26/train` is needed. Use the original
+zip from the private HF repo so the audio is byte-identical to the reference server's; do not re-encode, resample or
+convert anything. From `SRED/`:
+
+```bash
+hf download thucth/edge-device-speaker-recognition data/Vi-SRED26-Train.zip --local-dir hf_train
+echo "f2201ab78b37ea1998fa437224fa55b76be1bcdd603f307488f6c1b287f357ce  hf_train/data/Vi-SRED26-Train.zip" | sha256sum -c -
+mkdir -p data/Vi-SRED26/train && unzip -q hf_train/data/Vi-SRED26-Train.zip -d data/Vi-SRED26/train
+ls data/Vi-SRED26/train          # must show data/ and train.txt; if the zip adds a top folder, move its contents up
+ls data/Vi-SRED26/train/data | wc -l   # 1900 speaker folders
+```
+
+If the audio lives elsewhere, `export SRED_DATA=/path/to/Vi-SRED26` before `source env.sh`. Training uses the 57,010
+utterances of `lists/clean/train_clean.txt` (tracked in git); step 4 checks every one of them.
 
 **3. Pull the git-ignored inputs from Hugging Face** (private dataset repo `pieceofcakee/vlsp2026`, ≈ 3.4 GB; needs an
 `hf auth login` token with access to the `pieceofcakee` org). Run from `SRED/`:
@@ -73,16 +94,25 @@ If copying is not possible:
 - `realnoise_bank` (train backgrounds) depends on reference-only files: copy it.
 - ReDimNet2 code: `torch.hub` clone of `PalabraAI/redimnet2` (branch `main`) into `.cache/torch/hub/PalabraAI_redimnet2_main`.
 
-**4. Verify** (must print `all identical to the reference server`).
+**4. Verify: identical and complete data.** Must end with `all identical to the reference server`; do not train
+otherwise. About 2 minutes.
 
 ```bash
 source env.sh
-.venv/bin/python $E/prep/verify_artifacts.py
+.venv/bin/python $E/prep/verify_artifacts.py | tee $E/artifacts/verify_$(hostname).txt
 ```
 
-Reference hashes (`prep/expected_hashes.json`): manifest `3e812ab8d273eb7a`, crop bank `3a3499fbd42c2a78`,
-rir `32dd50b5dfb45f0c`, musan `dc585c4c1a7b8001`, realnoise `3752564cd3a87852`, B4 `4f0b1e8bc6bcc104`,
-B6 `287365f6f485b19e`, WavLM `8c1e5637ae88657f`.
+It checks:
+- **train audio**: all 57,010 wavs of the cleaned list exist, are 16 kHz with the manifest's sample count, and match
+  the reference sha256 per file (`artifacts/train_audio.sha256`); 1,823 speakers, 143.7 h; raw `train.txt`
+  58,404 lines / 1,900 speakers. Any missing or different file is listed by name.
+- **inputs**: manifest `3e812ab8d273eb7a`, train-audio list `cf7abbdb4a4c7a90`, crop bank `3a3499fbd42c2a78`,
+  rir `32dd50b5dfb45f0c`, musan `dc585c4c1a7b8001`, realnoise `3752564cd3a87852`, B4 `4f0b1e8bc6bcc104`,
+  B6 `287365f6f485b19e`, WavLM `8c1e5637ae88657f` (`prep/expected_hashes.json`).
+- **disk**: at least 10 GB free for teacher caches and run outputs.
+
+If a train file differs, re-extract it from the zip (step 2). Never rebuild the manifest or crop bank on this server
+to "fix" a mismatch: the crop ids would then differ from the reference server's.
 
 **5. Loader smoke test.**
 
