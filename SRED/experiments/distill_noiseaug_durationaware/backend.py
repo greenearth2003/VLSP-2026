@@ -1,5 +1,8 @@
 """Post-training scoring back-end: fit a calibrator once on TRAIN data, save it, score any trial list with it.
 
+    # 0. (optional) WiSE: blend the trained model with a partner checkpoint of the SAME architecture
+    .venv/bin/python experiments/distill_noiseaug_durationaware/backend.py wise TRAINED.pt PARTNER.pt OUT.pt --alpha 0.7
+    #    E4 (dense B6): partner = the approved pretrained B6 file; E5 (low-rank): partner = its compressed start
     # 1. one embedding pass for the model (train cohort clean + noisy + short crops, silver): posttrain_embed.py
     # 2. fit (CPU, seconds) -> a small JSON (+ .npy cohort when AS-norm / centering need it)
     .venv/bin/python experiments/distill_noiseaug_durationaware/backend.py fit --tag E4_step6000 --out runs/_calib/E4_step6000/qmf2.json
@@ -28,6 +31,21 @@ SRED = EXP.parents[1]
 sys.path[:0] = [str(SRED), str(EXP)]
 
 FLAGS = ("short", "norm", "speech", "center", "asnorm")
+
+
+def wise(trained, partner, out, alpha):
+    """theta = alpha * theta_trained + (1 - alpha) * theta_partner, float tensors only (keys must match exactly).
+    The partner may be a pretrained-format file ({model_config, state_dict}) or a train.py / lowrank checkpoint."""
+    import torch
+    t = torch.load(trained, map_location="cpu", weights_only=False)
+    p = torch.load(partner, map_location="cpu", weights_only=False)
+    pt = p["model"] if "model" in p else p["state_dict"]
+    assert set(pt) == set(t["model"]), "trained and partner checkpoints have different architectures"
+    sd = {k: (alpha * v.double() + (1 - alpha) * pt[k].double()).to(v.dtype) if v.is_floating_point() else v
+          for k, v in t["model"].items()}
+    torch.save({**{k: v for k, v in t.items() if k != "model"}, "model": sd,
+                "step": f"wise{alpha}({Path(trained).name}, {Path(partner).name})"}, out)
+    print(f"WiSE alpha {alpha}: {trained} + {partner} -> {out}")
 
 
 def fit(tag, out, flags):
@@ -127,6 +145,11 @@ def main():
     f.add_argument("--out", required=True)
     for k in FLAGS:
         f.add_argument(f"--{k}", action="store_true")
+    w = sub.add_parser("wise")
+    w.add_argument("trained")
+    w.add_argument("partner")
+    w.add_argument("out")
+    w.add_argument("--alpha", type=float, default=0.7)
     s = sub.add_parser("score")
     s.add_argument("model")
     s.add_argument("--calib", required=True)
@@ -134,7 +157,9 @@ def main():
     s.add_argument("--audio-dir", required=True)
     s.add_argument("--out", required=True)
     a = ap.parse_args()
-    if a.cmd == "fit":
+    if a.cmd == "wise":
+        wise(a.trained, a.partner, a.out, a.alpha)
+    elif a.cmd == "fit":
         out = Path(a.out) if Path(a.out).is_absolute() else EXP / a.out
         fit(a.tag, out, {k: getattr(a, k) for k in FLAGS})
     else:
