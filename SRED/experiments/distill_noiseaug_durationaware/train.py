@@ -27,6 +27,7 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 EXP = Path(__file__).resolve().parent
 SRED = EXP.parents[1]
@@ -52,7 +53,39 @@ def git_commit() -> str:
         return "unknown"
 
 
-def param_groups(model, objective, cfg):
+class Distill(nn.Module):
+    """E2 / E3 teacher terms (NEW_PLAN §10.2, §11.2) against cached clean-crop teacher embeddings (HANDOFF.md
+    "Teacher caches"): per teacher, embedding KD 1 - cos(P(z), t) through a training-only linear map P, and
+    relational KD SmoothL1(R_student, R_teacher) on the cosine matrices of the crops processed together. Each view
+    contributes half; long views run in chunks, so their relational term covers pairs inside a chunk."""
+
+    def __init__(self, cfg: dict, emb_dim: int, dev):
+        super().__init__()
+        self.cfg, self.T, self.w = cfg, {}, {}
+        self.proj = nn.ModuleDict()
+        for name, t in cfg["teachers"].items():
+            arr = np.load(EXP / t["cache"])
+            self.T[name] = torch.from_numpy(arr).to(dev)  # float16 [n_crops, D], L2-normalised
+            self.w[name] = (t["emb_weight"], t["rel_weight"])
+            self.proj[name] = nn.Linear(emb_dim, arr.shape[1], bias=False)
+            with torch.no_grad():
+                self.proj[name].weight.copy_(torch.eye(arr.shape[1], emb_dim))
+
+    def forward(self, z, crop, S):
+        """Loss of one chunk (already scaled for gradient accumulation over a view of S crops), per-term values."""
+        total, terms = 0.0, {}
+        zn = F.normalize(z, dim=1)
+        for name, T in self.T.items():
+            t = T[crop].float()
+            we, wr = self.w[name]
+            emb = (1 - F.cosine_similarity(self.proj[name](z), t, dim=1)).sum() / S
+            rel = F.smooth_l1_loss(zn @ zn.T, t @ t.T, beta=self.cfg["rel_beta"]) * len(crop) / S
+            total = total + 0.5 * (we * emb + wr * rel)
+            terms[f"{name}_emb"], terms[f"{name}_rel"] = float(emb) * S / len(crop), float(rel) * S / len(crop)
+        return total, terms
+
+
+def param_groups(model, objective, cfg, extra=()):
     o = cfg["optim"]
     emb_ids = {id(p) for m in (model.pool, model.bn, model.linear) for p in m.parameters()}
     backbone = [p for p in model.parameters() if p.requires_grad and id(p) not in emb_ids]
@@ -60,7 +93,8 @@ def param_groups(model, objective, cfg):
     return [
         {"name": "backbone", "params": backbone, "lr": o["backbone_lr"], "weight_decay": o["weight_decay"]},
         {"name": "embedding", "params": embedding, "lr": o["embedding_lr"], "weight_decay": o["weight_decay"]},
-        {"name": "heads", "params": list(objective.parameters()), "lr": o["head_lr"], "weight_decay": 0.0},
+        {"name": "heads", "params": list(objective.parameters()) + [q for m in extra for q in m.parameters()],
+         "lr": o["head_lr"], "weight_decay": 0.0},
     ]
 
 
@@ -120,7 +154,8 @@ def main(argv=None):
     cent = torch.from_numpy(load_or_build(model, info["manifest"], info["spk2id"], TRAIN_DIR, info["manifest_sha256"]))
     model.train()
     objective = Objective(cfg["loss"], n_cls, emb_dim, cent if cfg["loss"].get("centroid_init", True) else None).to(dev)
-    opt = torch.optim.AdamW(param_groups(model, objective, cfg))
+    kd = Distill(cfg["kd"], emb_dim, dev).to(dev) if cfg.get("kd") else None
+    opt = torch.optim.AdamW(param_groups(model, objective, cfg, [kd] if kd is not None else []))
     base_lrs = [g["lr"] for g in opt.param_groups]
     amp = {"bf16": torch.bfloat16, "fp16": torch.float16}.get(cfg["amp"])
 
@@ -129,6 +164,8 @@ def main(argv=None):
         r = torch.load(out / "last.pt", map_location="cpu", weights_only=False)
         model.load_state_dict(r["model"])
         objective.load_state_dict(r["objective"])
+        if kd is not None:
+            kd.proj.load_state_dict(r["kd_proj"])
         opt.load_state_dict(r["opt"])
         start = r["step"] + 1
         loader.batch_sampler.seed = a.seed + start  # fresh crop stream after resume
@@ -145,7 +182,7 @@ def main(argv=None):
     S = dcfg["speakers_per_step"]
     max_audio = cfg["max_chunk_audio_s"]
     last = cfg["steps"] if not a.max_steps else min(cfg["steps"], a.max_steps)
-    run = {"loss": 0.0, "n": 0, "t0": time.time(), "per": {}}
+    run = {"loss": 0.0, "n": 0, "t0": time.time(), "per": {}, "kd": {}}
     it = iter(loader)
     for step in range(start, last + 1):
         p = (step - 1) / cfg["steps"]
@@ -172,6 +209,11 @@ def main(argv=None):
                         z = model(wav[idx]).float()
                     per_sample, stats = objective.view_loss(z, lab[idx], view, p)
                     loss = w * per_sample.sum() / S
+                    if kd is not None:
+                        l_kd, terms = kd(z, v["crop"][idx].to(dev), S)
+                        loss = loss + l_kd
+                        for k_, x_ in terms.items():
+                            run["kd"][k_] = run["kd"].get(k_, 0.0) + x_ * len(idx) / (2 * S)
                 loss.backward()
                 step_loss += float(loss)
                 for d, (ls, hits) in stats.items():
@@ -187,15 +229,18 @@ def main(argv=None):
         if step % cfg["log_every"] == 0 or step == last:
             n = run["n"]
             heads = " ".join(f"{vw[0]}{d}:{ls / k:.2f}/{h / k:.2f}" for (vw, d), (ls, h, k) in sorted(run["per"].items()))
+            if run["kd"]:
+                heads += " | kd " + " ".join(f"{k_}:{x_ / n:.4f}" for k_, x_ in sorted(run["kd"].items()))
             P(f"step {step}{' (heads only)' if head_only else ''} loss={run['loss'] / n:.3f} [{heads}] alpha={objective.alpha(p):.2f} "
               f"margin_x={objective.margin_scale(p):.2f} lr={opt.param_groups[0]['lr']:.2e} "
               f"bins={b['bins'][0]:g}/{b['bins'][1]:g}s {(time.time() - run['t0']) / n:.2f}s/step "
               f"mem={torch.cuda.max_memory_allocated() / 2 ** 30:.1f}G")
-            run = {"loss": 0.0, "n": 0, "t0": time.time(), "per": {}}
+            run = {"loss": 0.0, "n": 0, "t0": time.time(), "per": {}, "kd": {}}
         if step % cfg["save_every"] == 0 or step == last:
             sd = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
             torch.save({"base_model": BASE_NAME, "model": sd, "step": step, "run": a.name}, out / f"step{step}.pt")
             torch.save({"base_model": BASE_NAME, "model": sd, "objective": objective.state_dict(),
+                        "kd_proj": kd.proj.state_dict() if kd is not None else None,
                         "opt": opt.state_dict(), "step": step, "config": cfg}, out / "last.tmp")
             (out / "last.tmp").replace(out / "last.pt")
     P("done", out)

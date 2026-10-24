@@ -1,0 +1,26 @@
+{
+  "_doc": "E3 (NEW_PLAN §11, §13): E2 + raw approved B6 teacher: relational x 0.5 + embedding x 0.1. Starts again from pretrained B4.",
+  "data_config": "configs/base.json",
+  "data_overrides": [],
+  "student_ckpt": "pretrained/redimnet2/b4-vox2-lm.pt",
+
+  "steps": 8000,
+  "save_every": 1000,
+  "log_every": 50,
+  "amp": "bf16",
+  "freeze_bn": true,
+  "grad_clip": 5.0,
+  "max_chunk_audio_s": 96,
+
+  "optim": {"backbone_lr": 1e-5, "embedding_lr": 3e-5, "head_lr": 1e-3, "weight_decay": 1e-4,
+            "warmup_steps": 500, "min_lr_frac": 0.05, "head_warmup": false,
+            "head_only_steps": 300},
+
+  "loss": {"type": "dame", "scale": 32.0, "lanbuda": 0.7, "t": 3, "margin_warmup": 0.2, "centroid_init": true,
+           "prefix_dims": [24, 48, 96, 192],
+           "margins": [0.0, 0.0, 0.1, 0.2],
+           "C": {"short": [1.0, 1.0, 0.25, 0.5], "long": [0.0625, 0.125, 1.0, 1.0]},
+           "alpha": {"start": 1.0, "end": 0.5, "until": 0.5}},
+
+  "kd": {"rel_beta": 0.1, "teachers": {"wavlm": {"cache": "artifacts/teacher_cache/wavlm.npy", "emb_weight": 0.5, "rel_weight": 1.0}, "b6": {"cache": "artifacts/teacher_cache/b6.npy", "emb_weight": 0.1, "rel_weight": 0.5}}}
+}
