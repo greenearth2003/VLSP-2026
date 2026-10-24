@@ -35,10 +35,26 @@ cd SRED && uv sync            # or reuse a .venv with torch 2.5 + torchaudio 2.5
 **2. Train audio.** Only `Vi-SRED26/train` is needed. Put it at `SRED/data/Vi-SRED26/train/{data,train.txt}` or
 export `SRED_DATA=/path/to/Vi-SRED26` before `source env.sh`.
 
-**3. Copy from the reference server** (all git-ignored; ≈ 3.4 GB).
+**3. Pull the git-ignored inputs from Hugging Face** (private dataset repo `pieceofcakee/vlsp2026`, ≈ 3.4 GB; needs an
+`hf auth login` token with access to the `pieceofcakee` org). Run from `SRED/`:
 
 ```bash
 E=experiments/distill_noiseaug_durationaware
+hf download pieceofcakee/vlsp2026 --repo-type dataset --include "$E/*" --local-dir hf_dnd
+H=hf_dnd/$E
+mkdir -p $E/pretrained $E/artifacts .cache/torch/hub
+cp -r $H/pretrained/. $E/pretrained/                                # B4, raw B6, WavLM-Large (1.3 GB)
+cp -r $H/artifacts/.  $E/artifacts/                                 # manifest, crop bank, duration eval set (41 MB)
+cp $H/deps/lists/*.npz lists/                                       # rir / musan / realnoise banks (2.0 GB)
+cp -r $H/deps/torch_hub/PalabraAI_redimnet2_main .cache/torch/hub/   # ReDimNet2 model code
+```
+
+The HF folder also holds a snapshot of this folder's code, but use the git branch for code (it has `sred/`, which
+the experiment imports).
+
+Alternative, copy from the reference server directly:
+
+```bash
 rsync -avP $REF:$R/$E/pretrained/ $E/pretrained/                 # 1.3 GB: B4, raw B6, WavLM-Large
 rsync -avP $REF:$R/$E/artifacts/manifest.jsonl $REF:$R/$E/artifacts/manifest.sha256 \
            $REF:$R/$E/artifacts/crop_bank.npz $E/artifacts/     # 41 MB
