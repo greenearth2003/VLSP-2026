@@ -155,6 +155,50 @@ tail -f $E/runs/E0_s1_<server>/log.txt
 NEW_PLAN §17 gates E2 on E1 and E3 on E2. Running them in parallel skips those gates, so treat parallel results as
 provisional until the gate comparisons are made on the reference server.
 
+## Teacher caches (spec for E2 / E3; frozen 2026-10-24)
+
+One file per teacher, embeddings of every CLEAN crop of the crop bank, computed once and read by `train.py`.
+
+| Item | B6 (`prep/cache_b6.py`, owner B) | WavLM (`prep/wavlm_teacher.py`, owner A) |
+|---|---|---|
+| file | `artifacts/teacher_cache/b6.npy` + `b6.json` | `artifacts/teacher_cache/wavlm.npy` + `wavlm.json` |
+| array | `float16`, shape `[859684, 192]`, C-contiguous, saved with `np.save` | same |
+| row i | crop `i` of `artifacts/crop_bank.npz` (the index in `batch[view]["crop"]`) | same |
+| model | raw approved B6 `pretrained/redimnet2/b6-vb2+vox2+cnc2_v0-lm.pt`, `sred.models._load_redimnet2_pt`, `eval()` | WavLM-Large frozen + the prepared speaker head (layer mix → attentive statistics pooling → linear 192) |
+| output | `model(wav)`: the 192-D output of the final `linear` (the embedding the model is scored with) | the 192-D projection output of the speaker head |
+| normalisation | L2-normalise each row in float32, then cast to float16 | same |
+
+Input audio, exactly as `BankCropDataset` reads it (no augmentation, no extra gain or normalisation; each model
+applies its own front-end):
+
+```python
+bank = np.load("artifacts/crop_bank.npz"); man = dnd.data.load_manifest("artifacts/manifest.jsonl")
+r = bank["row"][i]
+wav, _ = sf.read(TRAIN_DIR / man[r]["audio_path"], start=int(bank["start"][i]), frames=int(bank["length"][i]),
+                 dtype="float32", always_2d=False)          # mono 16 kHz, length = bin_sec * 16000
+```
+
+Batching: every crop of one bin has the same length (`bank["length"]` takes 11 values), so batch crops of the same
+bin together: no padding, no truncation. Any batch size; `torch.inference_mode()` with
+`torch.autocast("cuda", dtype=torch.bfloat16)`, embeddings cast to float32 before normalising. Process bins in any
+order and write each row to its index.
+
+`<teacher>.json` (written with the cache):
+
+```json
+{"teacher": "b6", "model_file": "pretrained/redimnet2/b6-vb2+vox2+cnc2_v0-lm.pt", "model_hash16": "287365f6f485b19e",
+ "crop_bank_hash16": "3a3499fbd42c2a78", "rows": 859684, "dim": 192, "dtype": "float16", "l2_normalised": true,
+ "autocast": "bf16", "host": "<hostname>", "seconds": 0, "sha256": "<sha256 of the .npy file>"}
+```
+
+`model_hash16` / `crop_bank_hash16` are the `prep/verify_artifacts.py` digests. Checks before upload: no all-zero row,
+every row norm within 1 ± 0.01, and for the first 1,000 crops cos(cache, fresh fp32 embedding) > 0.999.
+
+How `train.py` uses it (E2 / E3): `T = torch.from_numpy(np.load(path)).to("cuda")` (330 MB), `t = T[batch[view]["crop"]]`
+for the clean-crop targets of that view; the student sees the same crop with noise. Upload to HF at the same path:
+`hf upload pieceofcakee/vlsp2026 $E/artifacts/teacher_cache/b6.npy $E/artifacts/teacher_cache/b6.npy --repo-type dataset`
+(and `b6.json`).
+
 ## Sending results back through Hugging Face (validation stays on the reference server)
 
 The training server has no SSH access to the reference server, so runs travel through the private HF repo, under the
