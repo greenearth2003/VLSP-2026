@@ -146,17 +146,25 @@ def main(argv=None):
     loader, info = build_loader(dcfg, seed=a.seed, workers=a.workers)
     n_cls = len(info["speakers"])
     base_name = cfg.get("base_registry", BASE_NAME)
-    model = _load_redimnet2_pt(EXP / cfg["student_ckpt"]).to(dev)
+    lowrank = None
+    if cfg.get("student_init"):  # a compressed checkpoint from dnd/lowrank.py (E5): structure + weights
+        from dnd.lowrank import load_lowrank
+        model = load_lowrank(EXP / cfg["student_init"]).train().to(dev)
+        lowrank = torch.load(EXP / cfg["student_init"], map_location="cpu", weights_only=False)["lowrank"]
+    else:
+        model = _load_redimnet2_pt(EXP / cfg["student_ckpt"]).to(dev)
     n_params = sum(p.numel() for p in model.parameters())
     # teacher runs (e.g. E4-b6-teacher-finetune, 12.5M) are never submitted; every other run must fit the 7M limit
     assert n_params < 7_000_000 or cfg.get("teacher_run", False), n_params
     model.eval()
     with torch.no_grad():
         emb_dim = model(torch.zeros(1, 32000, device=dev)).shape[-1]
-    cent = torch.from_numpy(load_or_build(model, info["manifest"], info["spk2id"], TRAIN_DIR, info["manifest_sha256"],
-                                           EXP / cfg.get("centroids", "artifacts/b4_centroids.npy")))
+    cent = None
+    if cfg["loss"].get("centroid_init", True):
+        cent = torch.from_numpy(load_or_build(model, info["manifest"], info["spk2id"], TRAIN_DIR, info["manifest_sha256"],
+                                               EXP / cfg.get("centroids", "artifacts/b4_centroids.npy")))
     model.train()
-    objective = Objective(cfg["loss"], n_cls, emb_dim, cent if cfg["loss"].get("centroid_init", True) else None).to(dev)
+    objective = Objective(cfg["loss"], n_cls, emb_dim, cent).to(dev)
     kd = Distill(cfg["kd"], emb_dim, dev).to(dev) if cfg.get("kd") else None
     opt = torch.optim.AdamW(param_groups(model, objective, cfg, [kd] if kd is not None else []))
     base_lrs = [g["lr"] for g in opt.param_groups]
@@ -242,8 +250,9 @@ def main(argv=None):
             run = {"loss": 0.0, "n": 0, "t0": time.time(), "per": {}, "kd": {}}
         if step % cfg["save_every"] == 0 or step == last:
             sd = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
-            torch.save({"base_model": base_name, "model": sd, "step": step, "run": a.name}, out / f"step{step}.pt")
-            torch.save({"base_model": base_name, "model": sd, "objective": objective.state_dict(),
+            extra = {"lowrank": lowrank} if lowrank is not None else {}  # evaluate.py rebuilds compressed students from it
+            torch.save({"base_model": base_name, "model": sd, "step": step, "run": a.name, **extra}, out / f"step{step}.pt")
+            torch.save({"base_model": base_name, "model": sd, **extra, "objective": objective.state_dict(),
                         "kd_proj": kd.proj.state_dict() if kd is not None else None,
                         "opt": opt.state_dict(), "step": step, "config": cfg}, out / "last.tmp")
             (out / "last.tmp").replace(out / "last.pt")
