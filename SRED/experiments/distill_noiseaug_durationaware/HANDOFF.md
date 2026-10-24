@@ -69,6 +69,7 @@ cp -r $H/pretrained/. $E/pretrained/                                # B4, raw B6
 cp -r $H/artifacts/.  $E/artifacts/                                 # manifest, crop bank, duration eval set (41 MB)
 cp $H/deps/lists/*.npz lists/                                       # rir / musan / realnoise banks (2.0 GB)
 cp -r $H/deps/torch_hub/PalabraAI_redimnet2_main .cache/torch/hub/   # ReDimNet2 model code
+mkdir -p pretrained && ln -sfn ../$E/pretrained/redimnet2 pretrained/redimnet2   # checkpoints rebuild B4 from here
 ```
 
 The HF folder also holds a snapshot of this folder's code, but use the git branch for code (it has `sred/`, which
