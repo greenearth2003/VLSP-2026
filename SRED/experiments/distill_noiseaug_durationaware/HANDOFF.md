@@ -179,9 +179,12 @@ wav, _ = sf.read(TRAIN_DIR / man[r]["audio_path"], start=int(bank["start"][i]), 
 ```
 
 Batching: every crop of one bin has the same length (`bank["length"]` takes 11 values), so batch crops of the same
-bin together: no padding, no truncation. Any batch size; `torch.inference_mode()` with
-`torch.autocast("cuda", dtype=torch.bfloat16)`, embeddings cast to float32 before normalising. Process bins in any
-order and write each row to its index.
+bin together: no padding, no truncation. Any batch size, `torch.inference_mode()`, embeddings cast to float32 before
+normalising. Process bins in any order and write each row to its index.
+
+Precision (amended 14:20): use the cheapest setting that passes the 1,000-crop check below on crops of EVERY bin.
+For B6, bf16 autocast fails it on 0.18 % of crops (0.5–1 s bins, min cos 0.9966), so B6 is cached in fp32 with TF32
+matmul/conv (min cos 0.9997). Record the setting in the json `autocast` field (`"bf16"` or `"none (fp32, TF32)"`).
 
 `<teacher>.json` (written with the cache):
 
@@ -192,7 +195,7 @@ order and write each row to its index.
 ```
 
 `model_hash16` / `crop_bank_hash16` are the `prep/verify_artifacts.py` digests. Checks before upload: no all-zero row,
-every row norm within 1 ± 0.01, and for the first 1,000 crops cos(cache, fresh fp32 embedding) > 0.999.
+every row norm within 1 ± 0.01, and cos(cache, fresh full-fp32 embedding) > 0.999 on 1,000 crops drawn from all bins.
 
 How `train.py` uses it (E2 / E3): `T = torch.from_numpy(np.load(path)).to("cuda")` (330 MB), `t = T[batch[view]["crop"]]`
 for the clean-crop targets of that view; the student sees the same crop with noise. Upload to HF at the same path:
