@@ -45,6 +45,27 @@ full↔full.
 
 **Margin warm-up (E0 and E1–E3).** Each head's margin ramps linearly 0 → target over the first 20 % of steps.
 
+**Training recipe as implemented (`train.py`, `configs/e0.json`, `configs/e1.json`; identical for E0–E3 except `loss`
+and the KD terms).**
+
+| Item | Setting |
+|---|---|
+| student | approved B4 `pretrained/redimnet2/b4-vox2-lm.pt` (6,659,744 params), all layers trainable after the head-only phase |
+| head init | every SF2 head (each prefix) starts from pretrained-B4 speaker centroids of the clean train utterances, restricted to its prefix and re-normalised (`prep/head_init.py`, `artifacts/b4_centroids.npy`) |
+| head-only phase | first 300 steps: student frozen (lr 0, no autograd), only heads + SF2 bias train. Without it the 24-D prefix head started at a per-sample loss of ≈ 300 (192-D: ≈ 5) and its gradients reached the backbone |
+| LR | AdamW, weight decay 1e-4 (0 on heads). Backbone 1e-5, embedding (ASTP + bn + linear) 3e-5: 500-step linear warm-up after the head-only phase, then cosine to 5 %. Heads 1e-3: no warm-up, cosine to 5 % over all steps |
+| SF2 | scale 32, lambda 0.7, t = 3; margins warm 0 → target over the first 20 % of steps |
+| E0 objective | one 192-D head, L = 0.5 L_short + 0.5 L_long |
+| BatchNorm | statistics frozen (eval mode), so chunked forwards equal one full-batch forward |
+| chunks | each view runs in chunks of ≤ 96 audio-seconds (6 s × 32 does not fit), per-sample losses, exact gradient accumulation |
+| steps / checkpoints | 8,000 steps (300 head-only), 32 speakers × 2 views per step; `step<k>.pt` every 1,000 |
+| precision / clipping | bf16 autocast; gradient norm clipped at 5 |
+
+**Measured (2026-10-24).** Head-only steps ≈ 0.25 s (1.9 GB); full steps 0.65–1.0 s depending on the bins (11.4 GB
+peak), so one 8k-step run ≈ 2–2.5 h. Zero-shot pretrained B4 on silver (plain cosine, EER %): all 13.96, cleaned
+12.75, private-like 14.25; natural <0.75 s 22.26, 0.75–1 s 17.48, 1–2 s 11.90, 2–3 s 9.93, >3 s 6.14; full-3s 13.32,
+full-2s 14.48, full-1s 18.73, full-0.75s 22.04, full-0.5s 26.94, 2s-2s 15.15, 1s-1s 24.18; minDCF 0.652.
+
 **Weights** (`pretrained/`, verified): B4 `redimnet2/b4-vox2-lm.pt`, B6 `redimnet2/b6-vb2+vox2+cnc2_v0-lm.pt`,
 WavLM-Large `wavlm/wavlm_large.pth` (torchaudio `wavlm_large`, strict load).
 
@@ -63,10 +84,11 @@ condition N; exclusions are counted in the report.
 
 | Item | Estimate |
 |---|---|
-| step (32 × (1.17 s + 4.1 s) ≈ 169 audio-s) | ≈ 1.5 s |
-| one run: 8k steps (≈ 9 utterance passes) + eval | ≈ 3.6 h; resume to 12k if still improving (+1.7 h) |
+| step (32 × (1.17 s + 4.1 s) ≈ 169 audio-s) | estimated ≈ 1.5 s; measured 0.65–1.0 s |
+| one run: 8k steps (≈ 9 utterance passes) + eval | ≈ 2–2.5 h measured; resume to 12k if still improving |
 | one-time: manifest + crop bank + eval set / B6 cache (180× RT) / WavLM prep + cache (864× RT, measured) | 10 min (done) / ≈ 2.4 h / < 1 h |
-| E0–E3 + teachers | ≈ 17–18 GPU-h: night 1 E0+E1 → gate → night 2 teachers + E2 → night 3 E3 |
+| E0–E3 + teachers | ≈ 13–15 GPU-h: E0+E1 (started 2026-10-24 on the reference server) → gate → teachers + E2 → E3 |
+| validation | reference server only (`evaluate.py`); training servers return runs through the HF repo (HANDOFF.md) |
 
 ---
 

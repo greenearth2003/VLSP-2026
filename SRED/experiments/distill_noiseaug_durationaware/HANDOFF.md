@@ -18,7 +18,8 @@ by one crop silently mismatches every teacher target. `prep/verify_artifacts.py`
 |---|---|
 | data side: manifest, crop bank, two-view loader with noise, duration-aware eval set | **done**, verified on the reference server |
 | pretrained weights B4 / B6 / WavLM-Large | verified (hashes below) |
-| training pipeline (E0–E3 `train.py`, DAME heads, teacher prep + caching) | **not in the branch yet**. It lands on this branch; `git pull` before training. Until then this server can only be set up and verified (steps 1–5). |
+| E0 / E1 training (`train.py`, `configs/e0.json`, `configs/e1.json`, `run.sh`, head-init centroids) | **ready**; E0 → E1 running on the reference server since 2026-10-24 |
+| E2 / E3 (WavLM teacher prep, B6 / WavLM caches, KD terms) | **not in the branch yet**; lands on this branch, `git pull` + re-download `artifacts/` before E2 / E3 |
 
 ## Setup on the training server
 
@@ -124,34 +125,59 @@ Compare with the README table: all checks 300/300, views from different utteranc
 ≈ 30 / 50 / 30 / 20 %. Throughput must stay above ≈ 0.7 steps/s (B4 trains at ≈ 1.5 s/step); raise `--workers`
 if the disk is slow.
 
-## Training (once the pipeline is on the branch)
+## Training
 
-- Run only the phases assigned to this server (table below), with the phase config unchanged, seed 0, and the run
-  name `<phase>_<server>` (e.g. `E2_srv2`).
-- Teacher caches (B6, WavLM) are computed once per server from the same crop bank. With step 4 passing they are
-  interchangeable, so a cache built on one server can be copied instead of recomputed.
-- Budget per run ≈ 3.3 h for 8k steps on an RTX A4500-class GPU (20 GB); keep `speakers_per_step=32` (memory was
-  measured for it).
+```bash
+cd SRED && source env.sh
+git pull                                                                   # latest trainer
+hf download pieceofcakee/vlsp2026 --repo-type dataset --include "$E/artifacts/*" --local-dir hf_dnd
+cp -r hf_dnd/$E/artifacts/. $E/artifacts/                                  # incl. b4_centroids.npy (head init)
+.venv/bin/python $E/prep/verify_artifacts.py --skip-audio                  # still all ok
+SEED=1 setsid nohup $E/run.sh e0:E0_s1_<server> e1:E1_s1_<server> > $E/runs/<server>.log 2>&1 &
+tail -f $E/runs/E0_s1_<server>/log.txt
+```
+
+- `run.sh` takes `<config>:<run name>` pairs and runs them one after another; `SEED` (default 0) sets the seed.
+  Re-running the same command resumes each run from its `last.pt`.
+- Keep the phase configs unchanged; name runs `<phase>[_s<seed>]_<server>` so they never collide with the reference
+  server's `E0`, `E1`, ...
+- `artifacts/b4_centroids.npy` must come from the HF copy: recomputing it on another GPU gives slightly different
+  head initialisations.
+- Per run: 8,000 steps, ≈ 2–2.5 h on an RTX A4500 (20 GB), 11.4 GB peak; the first 300 steps train the heads only.
 
 | Phase | Server |
 |---|---|
-| E0 | TBD |
-| E1 | TBD |
-| E2 (+ WavLM teacher prep + cache) | TBD |
-| E3 (+ B6 cache) | TBD |
+| E0, E1 (seed 0) | reference server (running) |
+| E0, E1 (seed 1): run-to-run noise for the E0 → E1 gate (NEW_PLAN §19) | training server, suggested |
+| E2 (+ WavLM teacher prep + cache) | TBD, once the code lands |
+| E3 (+ B6 cache) | TBD, once the code lands |
 
-Note: NEW_PLAN §17 gates E2 on E1 and E3 on E2. Running them in parallel skips those gates, so treat parallel results
-as provisional until the gate comparisons are made on the reference server.
+NEW_PLAN §17 gates E2 on E1 and E3 on E2. Running them in parallel skips those gates, so treat parallel results as
+provisional until the gate comparisons are made on the reference server.
 
-## Sending results back (validation stays on the reference server)
+## Sending results back through Hugging Face (validation stays on the reference server)
 
-For each run copy the whole run folder into the same place on the reference server:
+The training server has no SSH access to the reference server, so runs travel through the private HF repo, under the
+same path as on disk. On the training server, after each checkpoint or at the end (re-running uploads only new files):
 
 ```bash
-rsync -avP $E/runs/<run>/ $REF:$R/$E/runs/<run>/      # config.json, log.txt, step*.pt, last.pt
+cd SRED && R=$E/runs/<run>
+cp $E/artifacts/verify_$(hostname).txt $R/ ; git rev-parse HEAD > $R/git_commit.txt
+hf upload pieceofcakee/vlsp2026 $R $R --repo-type dataset --exclude "last.pt" --exclude "*.tmp" \
+  --commit-message "run <run> from $(hostname)"
 ```
 
-Each run folder must contain `config.json` (full resolved config), the `git rev-parse HEAD` of the code that trained
-it, and the output of `prep/verify_artifacts.py` from the training server. The reference server runs every evaluation
-(silver all / cleaned / private-like, natural duration buckets, controlled-duration conditions) so all numbers come
-from one evaluator.
+This uploads `config.json`, `log.txt`, `train.out`, `step*.pt` (27 MB each) and the verification output;
+`last.pt` (optimizer state, for resuming only) stays on the training server.
+
+On the reference server:
+
+```bash
+cd SRED
+hf download pieceofcakee/vlsp2026 --repo-type dataset --include "$E/runs/<run>/*" --local-dir .
+.venv/bin/python $E/evaluate.py $E/runs/<run>/step8000.pt && .venv/bin/python $E/evaluate.py --table
+```
+
+Every run folder must contain `config.json` (resolved config with the git commit), `git_commit.txt` and the training
+server's `verify_<host>.txt` ending in `all identical to the reference server`. All numbers (silver all / cleaned /
+private-like, natural duration buckets, controlled-duration conditions) come from this one evaluator.

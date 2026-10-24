@@ -64,13 +64,14 @@ def param_groups(model, objective, cfg):
     ]
 
 
-def lr_mult(step, cfg, warmup=True):
-    """Linear warm-up, then cosine decay to min_lr_frac. Heads skip the warm-up (head_warmup: false) so the new
-    classifiers fit the pretrained geometry while the backbone LR is still ramping."""
+def lr_mult(step, cfg, warmup=True, offset=0):
+    """Linear warm-up, then cosine decay to min_lr_frac over the steps after `offset`. Heads skip the warm-up
+    (head_warmup: false); the student's schedule starts after the head-only phase (offset = head_only_steps)."""
     o = cfg["optim"]
+    step, total = step - offset, cfg["steps"] - offset
     if warmup and step < o["warmup_steps"]:
         return (step + 1) / o["warmup_steps"]
-    p = (step - o["warmup_steps"]) / max(1, cfg["steps"] - o["warmup_steps"])
+    p = (step - o["warmup_steps"]) / max(1, total - o["warmup_steps"])
     return o["min_lr_frac"] + (1 - o["min_lr_frac"]) * 0.5 * (1 + math.cos(math.pi * min(1.0, p)))
 
 
@@ -140,6 +141,7 @@ def main(argv=None):
     P(f"{a.name}: B4 {n_params:,} params, {n_cls} speakers, objective {cfg['loss']['type']} heads "
       f"{objective.dims}, steps {cfg['steps']}, git {git_commit()}")
 
+    H = cfg["optim"].get("head_only_steps", 0)
     S = dcfg["speakers_per_step"]
     max_audio = cfg["max_chunk_audio_s"]
     last = cfg["steps"] if not a.max_steps else min(cfg["steps"], a.max_steps)
@@ -148,8 +150,10 @@ def main(argv=None):
     for step in range(start, last + 1):
         p = (step - 1) / cfg["steps"]
         b = next(it)
-        m = lr_mult(step - 1, cfg)
-        m_heads = lr_mult(step - 1, cfg, warmup=False) if not cfg["optim"]["head_warmup"] else m
+        # head-only phase: student frozen (lr 0, run without autograd) while the new heads fit its embeddings
+        head_only = step <= H
+        m = 0.0 if head_only else lr_mult(step - 1, cfg, offset=H)
+        m_heads = lr_mult(step - 1, cfg, warmup=False) if not cfg["optim"]["head_warmup"] else lr_mult(step - 1, cfg)
         for g, lr0 in zip(opt.param_groups, base_lrs):
             g["lr"] = lr0 * (m_heads if g["name"] == "heads" else m)
         if cfg["freeze_bn"]:
@@ -164,7 +168,8 @@ def main(argv=None):
             n_chunks = max(1, math.ceil(S * sec / max_audio))
             for idx in torch.arange(S).chunk(n_chunks):
                 with torch.autocast("cuda", dtype=amp, enabled=amp is not None):
-                    z = model(wav[idx]).float()
+                    with torch.set_grad_enabled(not head_only):
+                        z = model(wav[idx]).float()
                     per_sample, stats = objective.view_loss(z, lab[idx], view, p)
                     loss = w * per_sample.sum() / S
                 loss.backward()
@@ -182,7 +187,7 @@ def main(argv=None):
         if step % cfg["log_every"] == 0 or step == last:
             n = run["n"]
             heads = " ".join(f"{vw[0]}{d}:{ls / k:.2f}/{h / k:.2f}" for (vw, d), (ls, h, k) in sorted(run["per"].items()))
-            P(f"step {step} loss={run['loss'] / n:.3f} [{heads}] alpha={objective.alpha(p):.2f} "
+            P(f"step {step}{' (heads only)' if head_only else ''} loss={run['loss'] / n:.3f} [{heads}] alpha={objective.alpha(p):.2f} "
               f"margin_x={objective.margin_scale(p):.2f} lr={opt.param_groups[0]['lr']:.2e} "
               f"bins={b['bins'][0]:g}/{b['bins'][1]:g}s {(time.time() - run['t0']) / n:.2f}s/step "
               f"mem={torch.cuda.max_memory_allocated() / 2 ** 30:.1f}G")
