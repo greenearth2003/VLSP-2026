@@ -1,0 +1,23 @@
+{
+  "_doc": "E1 (NEW_PLAN §0, §9): E0 + DAME-SW. Prefixes 24/48/96/192 with separate SF2 heads, margins 0/0/0.1/0.2 (warm-up over 20 %), C rows for short/long views, alpha(p) = max(0.5, 1 - p).",
+  "data_config": "configs/base.json",
+  "data_overrides": [],
+  "student_ckpt": "pretrained/redimnet2/b4-vox2-lm.pt",
+
+  "steps": 8000,
+  "save_every": 1000,
+  "log_every": 50,
+  "amp": "bf16",
+  "freeze_bn": true,
+  "grad_clip": 5.0,
+  "max_chunk_audio_s": 96,
+
+  "optim": {"backbone_lr": 1e-5, "embedding_lr": 3e-5, "head_lr": 1e-3, "weight_decay": 1e-4,
+            "warmup_steps": 500, "min_lr_frac": 0.05, "head_warmup": false},
+
+  "loss": {"type": "dame", "scale": 32.0, "lanbuda": 0.7, "t": 3, "margin_warmup": 0.2, "centroid_init": true,
+           "prefix_dims": [24, 48, 96, 192],
+           "margins": [0.0, 0.0, 0.1, 0.2],
+           "C": {"short": [1.0, 1.0, 0.25, 0.5], "long": [0.0625, 0.125, 1.0, 1.0]},
+           "alpha": {"start": 1.0, "end": 0.5, "until": 0.5}}
+}
