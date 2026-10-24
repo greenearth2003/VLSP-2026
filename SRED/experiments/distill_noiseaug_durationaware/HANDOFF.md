@@ -229,3 +229,23 @@ hf download pieceofcakee/vlsp2026 --repo-type dataset --include "$E/runs/<run>/*
 Every run folder must contain `config.json` (resolved config with the git commit), `git_commit.txt` and the training
 server's `verify_<host>.txt` ending in `all identical to the reference server`. All numbers (silver all / cleaned /
 private-like, natural duration buckets, controlled-duration conditions) come from this one evaluator.
+
+## Final recipe + private submission on the training server (D17)
+
+`recipe.sh` runs the whole final recipe (D15) on one checkpoint: WiSE 0.7 with its partner, one embedding pass, QMF2
+calibrator fitted on train only (+norm +speech +asnorm), silver metrics, private scoring, checked zip. Extra inputs
+(private HF repo; competition data, keep private):
+
+```bash
+cd SRED
+hf download pieceofcakee/vlsp2026 silver/public_rumble_v2.tar eval/private_test.tar \
+  --include "$E/artifacts/duration_eval/*" --repo-type dataset --local-dir .   # silver ≈ 4.3 GB, private ≈ 7.9 GB
+mkdir -p data && tar -xf silver/public_rumble_v2.tar -C data          # -> data/public_rumble_v2/
+tar -xf eval/private_test.tar -C $SRED_DATA                           # -> $SRED_DATA/private_test/{private-test.txt,data/}
+# E5 checkpoint (partner = its compressed start):
+$E/recipe.sh runs/E5-b6-lowrank-kd/step8000.pt artifacts/e5_init_lowrank_step6000.pt E5s8000_wise0.7
+```
+
+≈ 30-45 min per checkpoint on one GPU (embedding pass), then ≈ 5 min for private. Send back
+`runs/_calib/<TAG>/*.json`, `runs/_eval/final__<TAG>_*.json` and `runs/_submit/result-private-<TAG>.zip`
+(+ `results_<TAG>.txt`) through HF; the silver numbers must agree with the reference server within the D1 tolerance.
