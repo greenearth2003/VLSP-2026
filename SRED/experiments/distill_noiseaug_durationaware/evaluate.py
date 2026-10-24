@@ -98,7 +98,7 @@ def embed(model, items, dev="cuda", normalize=True):
     return out
 
 
-def evaluate(spec, suffix=""):
+def evaluate(spec, suffix="", whole_only=False):
     model, tag = load_student(spec)
     model = model.cuda().eval()
     tr = pd.read_csv(DEV / "trials.csv")
@@ -107,7 +107,8 @@ def evaluate(spec, suffix=""):
     y = tr.label.to_numpy()
     files = sorted(set(tr.a) | set(tr.b))
     items = [(("full", f), f, 0, None) for f in files]
-    items += [((n, f), f, int(s), int(L)) for f, n, s, L in crops[["file", "N", "start", "length"]].itertuples(index=False)]
+    if not whole_only:  # --whole-only: quick screen, silver all / cleaned / private-like / natural buckets only
+        items += [((n, f), f, int(s), int(L)) for f, n, s, L in crops[["file", "N", "start", "length"]].itertuples(index=False)]
     E = embed(model, items)
 
     def score(ea, eb, idx):  # ea / eb: "full" or a crop length in seconds
@@ -126,7 +127,7 @@ def evaluate(spec, suffix=""):
          "silver_private_like": eer(s_full, y, w), "silver_minDCF": float(compute_min_dcf(s_full, y))}
     for name, c in conds.items():
         idx = np.array(c["trials"], int)
-        if not len(idx):
+        if not len(idx) or (whole_only and c["kind"] != "natural" and name != "full-full"):
             continue
         key = lambda v: "full" if v is None else float(v)  # noqa: E731
         s = s_full[idx] if c["kind"] == "natural" else score(key(c["enrol"]), key(c["test"]), idx)
@@ -153,9 +154,10 @@ def main():
     ap.add_argument("ckpts", nargs="*")
     ap.add_argument("--table", action="store_true")
     ap.add_argument("--suffix", default="", help="appended to the result name, e.g. __l40s on another server")
+    ap.add_argument("--whole-only", action="store_true", help="skip the controlled-duration crops (≈ 2x faster)")
     a = ap.parse_args()
     for c in a.ckpts:
-        r = evaluate(c, a.suffix)
+        r = evaluate(c, a.suffix, a.whole_only)
         print(r["tag"], " ".join(f"{k}={v:.3f}" for k, v in r.items() if k not in ("tag", "host")), flush=True)
     if a.table or not a.ckpts:
         table()
