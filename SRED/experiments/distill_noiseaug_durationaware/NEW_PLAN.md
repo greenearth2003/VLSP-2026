@@ -11,8 +11,8 @@ name; E0 / E1 keep their folders (`runs/E0`, `runs/E1`) so existing HF paths and
 | E1-b4-dame | E0 + DAME-SW prefix heads (run folder E1) | done: NO-GO at the gate (worse on every short-duration metric) |
 | E2-b4-dame-wavlm-kd | E1 + WavLM teacher KD | cancelled |
 | E3-b4-dame-wavlm-b6-kd | E2 + raw B6 teacher KD | cancelled |
-| E4-b6-teacher-finetune | approved B6 (12.5M, teacher only) trained with exactly the E0 recipe (configs/e4.json) | running on B; gate: must beat E0-b4-finetune on silver incl. short buckets |
-| E5-b6-lowrank-kd | our own low-rank (SVD) compression of E4 to < 7M, then recovery on the two-view noisy data with KD from E4's cached clean-crop embeddings | next, main line |
+| E4-b6-teacher-finetune | approved B6 (12.5M, teacher only) trained with exactly the E0 recipe (configs/e4.json) | done, gate GO; best checkpoint = step 6000 (silver all 5.345, cleaned 3.899, private-like 5.946) |
+| E5-b6-lowrank-kd | E4 step 6000 compressed to < 7M with our whitened SVD (dnd/lowrank.py), then recovered on the two-view noisy data with KD from E4 step 6000's cached clean-crop embeddings (configs/e5.json) | running on B |
 | E6-b4-kd | B4 + E0 recipe + KD from E4 | next, comparison |
 | E7-b6-prune-kd | our structured channel pruning (sred/prune.py) of E4 to < 7M + the same KD recovery | next, alternative compression |
 
