@@ -2,7 +2,8 @@
 of every clean crop of the crop bank (HANDOFF.md "Teacher caches").
 
     .venv/bin/python experiments/distill_noiseaug_durationaware/prep/wavlm_teacher.py prep  [--steps 4000]
-    .venv/bin/python experiments/distill_noiseaug_durationaware/prep/wavlm_teacher.py cache
+    .venv/bin/python experiments/distill_noiseaug_durationaware/prep/wavlm_teacher.py check  # bf16 vs fp32, 1,000 crops
+    .venv/bin/python experiments/distill_noiseaug_durationaware/prep/wavlm_teacher.py cache [--precision fp32]
     .venv/bin/python experiments/distill_noiseaug_durationaware/prep/wavlm_teacher.py eval   # silver EER of the teacher
 
 Teacher = WavLM-Large (frozen, torchaudio state dict) -> its 24 transformer layer outputs -> softmax-weighted sum
@@ -77,9 +78,12 @@ def load_wavlm(dev="cuda"):
     return m.to(dev).eval()
 
 
+PRECISION = {"bf16": "bf16"}  # set by `cache --precision`; "fp32" = no autocast, TF32 matmul/conv
+
+
 @torch.no_grad()  # not inference_mode: the head trains on these outputs in `prep`
 def wavlm_layers(wavlm, wav):
-    with torch.autocast("cuda", dtype=torch.bfloat16):
+    with torch.autocast("cuda", dtype=torch.bfloat16, enabled=PRECISION["bf16"] == "bf16"):
         feats, _ = wavlm.extract_features(wav)
     return [f.float() for f in feats]
 
@@ -135,10 +139,39 @@ def load_teacher():
 
 @torch.inference_mode()
 def embed(wavlm, head, wav):
-    return F.normalize(head(wavlm_layers(wavlm, wav)).float(), dim=1)
+    with torch.autocast("cuda", dtype=torch.bfloat16, enabled=PRECISION["bf16"] == "bf16"):
+        z = head(wavlm_layers(wavlm, wav))
+    return F.normalize(z.float(), dim=1)
 
 
-def cache(bs_audio_s: float = 256.0, limit: int = 0):
+def read_crops(bank, man, ch, L):
+    return np.stack([sf.read(str(TRAIN_DIR / man[bank["row"][c]]["audio_path"]), start=int(bank["start"][c]),
+                             frames=int(L), dtype="float32", always_2d=False)[0] for c in ch])
+
+
+def check(n: int = 1000):
+    """HANDOFF D2: cos(bf16 embedding, full-fp32 embedding) on n crops drawn evenly from all bins."""
+    torch.backends.cuda.matmul.allow_tf32 = torch.backends.cudnn.allow_tf32 = False
+    wavlm, head = load_teacher()
+    bank = dict(np.load(EXP / "artifacts/crop_bank.npz"))
+    man = load_manifest(EXP / "artifacts/manifest.jsonl")
+    rng = np.random.default_rng(0)
+    for L in sorted(set(bank["length"].tolist())):
+        ch = rng.choice(np.flatnonzero(bank["length"] == L), n // 11, replace=False)
+        cos = []
+        for part in np.array_split(ch, max(1, len(ch) // 16)):  # small batches: fits next to a training run
+            x = torch.from_numpy(read_crops(bank, man, part, L)).cuda()
+            PRECISION["bf16"] = "bf16"
+            a = embed(wavlm, head, x)
+            PRECISION["bf16"] = "fp32"
+            cos.append((a * embed(wavlm, head, x)).sum(1))
+        cos = torch.cat(cos)
+        print(f"  {L / 16000:4.2f}s  min cos {cos.min():.5f}  share < 0.999 {(cos < 0.999).float().mean():.4f}")
+
+
+def cache(bs_audio_s: float = 256.0, limit: int = 0, precision: str = "bf16"):
+    PRECISION["bf16"] = precision
+    torch.backends.cuda.matmul.allow_tf32 = torch.backends.cudnn.allow_tf32 = True
     wavlm, head = load_teacher()
     bank = dict(np.load(EXP / "artifacts/crop_bank.npz"))
     man = load_manifest(EXP / "artifacts/manifest.jsonl")
@@ -151,8 +184,7 @@ def cache(bs_audio_s: float = 256.0, limit: int = 0):
         bs = max(8, int(bs_audio_s * 16000 / L))
         for i in range(0, len(idx), bs):
             ch = idx[i:i + bs]
-            wav = np.stack([sf.read(str(TRAIN_DIR / man[bank["row"][c]]["audio_path"]), start=int(bank["start"][c]),
-                                    frames=int(L), dtype="float32", always_2d=False)[0] for c in ch])
+            wav = read_crops(bank, man, ch, L)
             out[ch] = embed(wavlm, head, torch.from_numpy(wav).cuda()).cpu().numpy().astype(np.float16)
             done += len(ch)
             if (i // bs) % 50 == 0:
@@ -166,7 +198,7 @@ def cache(bs_audio_s: float = 256.0, limit: int = 0):
     meta = {"teacher": "wavlm", "model_file": "pretrained/wavlm/wavlm_large.pth", "model_hash16": digest16(WAVLM),
             "head_file": "artifacts/teacher_cache/wavlm_head.pt", "head_hash16": digest16(OUT / "wavlm_head.pt"),
             "crop_bank_hash16": "3a3499fbd42c2a78", "rows": n, "dim": 192, "dtype": "float16", "l2_normalised": True,
-            "autocast": "bf16", "host": socket.gethostname(), "seconds": round(time.time() - t0),
+            "autocast": "bf16" if precision == "bf16" else "none (fp32, TF32)", "host": socket.gethostname(), "seconds": round(time.time() - t0),
             "sha256": hashlib.sha256((OUT / "wavlm.npy").read_bytes()).hexdigest()}
     (OUT / "wavlm.json").write_text(json.dumps(meta, indent=2))
     print("->", OUT / "wavlm.npy", meta["seconds"], "s")
@@ -189,8 +221,10 @@ def eval_silver():
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("stage", choices=["prep", "cache", "eval"])
+    ap.add_argument("stage", choices=["prep", "check", "cache", "eval"])
+    ap.add_argument("--precision", choices=["bf16", "fp32"], default="bf16", help="cache: per HANDOFF D2 check")
     ap.add_argument("--steps", type=int, default=4000)
     ap.add_argument("--limit", type=int, default=0, help="cache: smoke test on the first N crops of each bin")
     a = ap.parse_args()
-    {"prep": lambda: prep(a.steps), "cache": lambda: cache(limit=a.limit), "eval": eval_silver}[a.stage]()
+    {"prep": lambda: prep(a.steps), "check": check, "cache": lambda: cache(limit=a.limit, precision=a.precision),
+     "eval": eval_silver}[a.stage]()
