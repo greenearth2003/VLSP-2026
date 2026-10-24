@@ -3,6 +3,8 @@ every CLEAN crop of the crop bank, row i = crop i.
 
     .venv/bin/python experiments/distill_noiseaug_durationaware/prep/cache_b6.py               # all 859,684 crops
     .venv/bin/python experiments/distill_noiseaug_durationaware/prep/cache_b6.py --limit 1000  # test: first 1,000 crops
+    .venv/bin/python experiments/distill_noiseaug_durationaware/prep/cache_b6.py \
+        --ckpt runs/E4-b6-teacher-finetune/avg5k-8k.pt --out e4avg                           # a fine-tuned B6 (E5 teacher)
 
 Writes artifacts/teacher_cache/b6.npy (float16 [859684, 192], rows L2-normalised in float32) + b6.json. Crops of one bin
 share a length, so batches hold one bin: no padding, no truncation. Checks before writing the .json: no all-zero row,
@@ -91,7 +93,9 @@ def run(model, ds, ids, max_audio_s, workers, precision, log_every=200):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--limit", type=int, default=0, help="only the first N crops (test); writes b6_testN.npy")
+    ap.add_argument("--limit", type=int, default=0, help="only the first N crops (test); writes <out>_testN.npy")
+    ap.add_argument("--ckpt", help="train.py checkpoint (relative to the experiment): its \"model\" weights replace B6's")
+    ap.add_argument("--out", default="b6", help="cache name: artifacts/teacher_cache/<out>.npy + .json")
     ap.add_argument("--max-audio-s", type=float, default=512, help="audio seconds per batch")
     ap.add_argument("--workers", type=int, default=16)
     ap.add_argument("--precision", choices=["tf32", "bf16"], default="tf32")
@@ -102,7 +106,10 @@ def main():
     ds = Crops(bank, manifest)
     n = len(ds)
     ids = np.arange(args.limit or n)
-    model = _load_redimnet2_pt(EXP / MODEL).cuda().eval()
+    model = _load_redimnet2_pt(EXP / MODEL)
+    if args.ckpt:
+        model.load_state_dict(torch.load(EXP / args.ckpt, map_location="cpu", weights_only=False)["model"])
+    model = model.cuda().eval()
 
     t0 = time.time()
     T = run(model, ds, ids, args.max_audio_s, args.workers, args.precision)
@@ -122,11 +129,12 @@ def main():
 
     out_dir = EXP / "artifacts/teacher_cache"
     out_dir.mkdir(parents=True, exist_ok=True)
-    name = f"b6_test{args.limit}" if args.limit else "b6"
+    name = f"{args.out}_test{args.limit}" if args.limit else args.out
     npy = out_dir / f"{name}.npy"
     np.save(npy, np.ascontiguousarray(T[ids] if args.limit else T))
     sha = hashlib.sha256(npy.read_bytes()).hexdigest()
-    meta = {"teacher": "b6", "model_file": MODEL, "model_hash16": digest(EXP / MODEL),
+    meta = {"teacher": args.out, "model_file": MODEL, "model_hash16": digest(EXP / MODEL),
+            **({"ckpt_file": args.ckpt, "ckpt_hash16": digest(EXP / args.ckpt)} if args.ckpt else {}),
             "crop_bank_hash16": digest(BANK), "rows": len(ids), "dim": 192, "dtype": "float16",
             "l2_normalised": True,
             "autocast": "bf16" if args.precision == "bf16" else "none (fp32, TF32 matmul/conv)", "host": socket.gethostname(), "seconds": seconds,
