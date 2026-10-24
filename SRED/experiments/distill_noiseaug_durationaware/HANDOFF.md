@@ -246,6 +246,6 @@ tar -xf eval/private_test.tar -C $SRED_DATA                           # -> $SRED
 $E/recipe.sh runs/E5-b6-lowrank-kd/step8000.pt artifacts/e5_init_lowrank_step6000.pt E5s8000_wise0.7
 ```
 
-≈ 30-45 min per checkpoint on one GPU (embedding pass), then ≈ 5 min for private. Send back
+≈ 30-45 min per checkpoint on one GPU (embedding pass), then ≈ 45 min for private (37,354 files). Send back
 `runs/_calib/<TAG>/*.json`, `runs/_eval/final__<TAG>_*.json` and `runs/_submit/result-private-<TAG>.zip`
 (+ `results_<TAG>.txt`) through HF; the silver numbers must agree with the reference server within the D1 tolerance.

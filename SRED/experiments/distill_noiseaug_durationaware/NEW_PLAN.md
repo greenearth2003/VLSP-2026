@@ -15,6 +15,7 @@ name; E0 / E1 keep their folders (`runs/E0`, `runs/E1`) so existing HF paths and
 | E5-b6-lowrank-kd | E4 step 6000 compressed to < 7M with our whitened SVD (dnd/lowrank.py), then recovered on the two-view noisy data with KD from E4 step 6000's cached clean-crop embeddings (configs/e5.json) | running on B |
 | E6-b4-kd | B4 + E0 recipe + KD from E4 | next, comparison |
 | E7-b6-prune-kd | our structured channel pruning (sred/prune.py) of E4 to < 7M + the same KD recovery | next, alternative compression |
+| E8-b6-lowrank-kd-continue | fresh 5000-step run (new heads, optimizer, schedule; seed 1) from the best E5 checkpoint by the final recipe's silver score, KD from E4 step 6000 as E5 (configs/e8.json) | planned (D18) |
 
 Reference points that are not our experiments keep descriptive names: "teammate's C2 model", "previous submission
 (C2X soup)", "zero-shot B4".

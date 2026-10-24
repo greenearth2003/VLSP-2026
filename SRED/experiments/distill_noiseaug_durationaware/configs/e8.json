@@ -1,0 +1,44 @@
+{
+  "_doc": "E8-b6-lowrank-kd-continue (D18): a FRESH 5000-step run from E5-b6-lowrank-kd step 8000, the best E5 checkpoint by the final recipe's silver (5.333 / 3.903 / 5.700 vs step6000 5.349, step10000 5.353): new SF2 head from centroids of that checkpoint + 300 head-only steps, new AdamW and LR schedule (warm-up 500, cosine to 5 %), same LRs, data and KD from E4 step 6000 as E5. Run with --seed 1 so the batch sequence differs from E5's.",
+  "data_config": "configs/base.json",
+  "data_overrides": [],
+  "student_init": "runs/E5-b6-lowrank-kd/step8000.pt",
+  "base_registry": "redimnet2_b6_mix_teacher_pt",
+  "centroids": "artifacts/e8_init_E5s8000_centroids.npy",
+  "steps": 5000,
+  "save_every": 1000,
+  "log_every": 50,
+  "amp": "bf16",
+  "freeze_bn": true,
+  "grad_clip": 5.0,
+  "max_chunk_audio_s": 96,
+  "optim": {
+    "backbone_lr": 1e-05,
+    "embedding_lr": 3e-05,
+    "head_lr": 0.001,
+    "weight_decay": 0.0001,
+    "warmup_steps": 500,
+    "min_lr_frac": 0.05,
+    "head_warmup": false,
+    "head_only_steps": 300
+  },
+  "loss": {
+    "type": "single",
+    "margin": 0.2,
+    "scale": 32.0,
+    "lanbuda": 0.7,
+    "t": 3,
+    "margin_warmup": 0.2,
+    "centroid_init": true
+  },
+  "kd": {
+    "rel_beta": 0.1,
+    "teachers": {
+      "e4s6000": {
+        "cache": "artifacts/teacher_cache/e4s6000.npy",
+        "emb_weight": 2.0,
+        "rel_weight": 1.0
+      }
+    }
+  }
+}
