@@ -52,10 +52,22 @@ def eer(s, y, w=None):
     return float(100 * (frr[k] + far[k]) / 2)
 
 
+def p_is_lowrank(spec: str) -> bool:
+    """Checkpoints written by dnd/lowrank.py carry a "lowrank" key (rank per factorised layer)."""
+    p = Path(spec) if Path(spec).exists() else EXP / spec
+    return p.suffix == ".pt" and p.exists() and "lowrank" in torch.load(p, map_location="cpu", weights_only=False)
+
+
 def load_student(spec: str):
     from sred.models import _load_redimnet2_pt, load_model
     if spec == "b4-pretrained":
         return _load_redimnet2_pt(EXP / "pretrained/redimnet2/b4-vox2-lm.pt"), "b4-pretrained"
+    if spec == "b6-pretrained":
+        return _load_redimnet2_pt(EXP / "pretrained/redimnet2/b6-vb2+vox2+cnc2_v0-lm.pt"), "b6-pretrained"
+    if p_is_lowrank(spec):
+        from dnd.lowrank import load_lowrank
+        p = Path(spec) if Path(spec).exists() else EXP / spec
+        return load_lowrank(p), f"{p.parent.name}__{p.stem}"
     p = Path(spec)
     p = p if p.is_absolute() or p.exists() else EXP / spec
     return load_model(str(p)), f"{p.parent.name}__{p.stem}"
