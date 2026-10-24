@@ -11,7 +11,7 @@ Our best system, C2X soup, is a 6,917,480-parameter ReDimNet2-B6 derivative. It 
 | C2 + Q3 (submitted, private 5.6) | 5.60 / 4.07 | 5.77 | 5.61 / 4.17 | 7.02 / 5.81 |
 | **C2X soup + trimmed average + Q3** | **5.41 / 3.93** | **5.71** | **5.38 / 3.96** | 7.01 / 5.81 |
 
-Private submission file: `submissions/final_private/result-private-S_C2X_X8-fv-q3.zip` (being built; `result-private-C2X-fv-q3.zip`, the first fine-tune alone, is the ready fallback).
+Private submission file: `submissions/final_private/result-private-S_C2X_X8-fv-q3.zip` (278,410 lines in the official order, all scores finite; `result-private-C2X-fv-q3.zip`, the first fine-tune alone, is the fallback).
 
 ## Pipeline
 
