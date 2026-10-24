@@ -1,10 +1,10 @@
 {
-  "_doc": "E5-b6-lowrank-kd: student = E4 (average of steps 5k-8k) compressed to < 7M by dnd/lowrank.py (whitened SVD); trained with the E0 recipe (two-view noisy data, one 192-D SF2 head, head-only phase) plus KD from the same E4 average (cached clean-crop embeddings): embedding 1 - cos x 2.0 (as in the C2X recipe) + relational SmoothL1 (beta 0.1) x 1.0. The student starts in the teacher's embedding space, so the KD projection starts at identity.",
+  "_doc": "E5-b6-lowrank-kd: student = E4 step 6000 (its best checkpoint, D13) compressed to < 7M by dnd/lowrank.py (whitened SVD); trained with the E0 recipe (two-view noisy data, one 192-D SF2 head, head-only phase) plus KD from the same E4 step 6000 (cached clean-crop embeddings): embedding 1 - cos x 2.0 (as in the C2X recipe) + relational SmoothL1 (beta 0.1) x 1.0. The student starts in the teacher's embedding space, so the KD projection starts at identity.",
   "data_config": "configs/base.json",
   "data_overrides": [],
-  "student_init": "artifacts/e5_init_lowrank.pt",
+  "student_init": "artifacts/e5_init_lowrank_step6000.pt",
   "base_registry": "redimnet2_b6_mix_teacher_pt",
-  "centroids": "artifacts/e5_init_centroids.npy",
+  "centroids": "artifacts/e5_init_step6000_centroids.npy",
 
   "steps": 8000,
   "save_every": 1000,
@@ -21,5 +21,5 @@
   "loss": {"type": "single", "margin": 0.2, "scale": 32.0, "lanbuda": 0.7, "t": 3,
            "margin_warmup": 0.2, "centroid_init": true},
 
-  "kd": {"rel_beta": 0.1, "teachers": {"e4avg": {"cache": "artifacts/teacher_cache/e4avg.npy", "emb_weight": 2.0, "rel_weight": 1.0}}}
+  "kd": {"rel_beta": 0.1, "teachers": {"e4s6000": {"cache": "artifacts/teacher_cache/e4s6000.npy", "emb_weight": 2.0, "rel_weight": 1.0}}}
 }
