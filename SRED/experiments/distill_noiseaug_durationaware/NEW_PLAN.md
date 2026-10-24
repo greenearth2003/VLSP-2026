@@ -1,5 +1,24 @@
 # Frozen Training Plan — E0 to E3
 
+# Experiment names (2026-10-24, user rule)
+
+Variants are named only `E<number>-<what it is>`; no other letter codes. Run folders of new experiments use the full
+name; E0 / E1 keep their folders (`runs/E0`, `runs/E1`) so existing HF paths and logs stay valid.
+
+| Name | What it is | Status |
+|---|---|---|
+| E0-b4-finetune | pretrained B4, two-view noisy data, one 192-D head (run folder E0; seed 1 = E0_s1_l40s) | done: silver all 7.755 (seed 1: 7.639) |
+| E1-b4-dame | E0 + DAME-SW prefix heads (run folder E1) | done: NO-GO at the gate (worse on every short-duration metric) |
+| E2-b4-dame-wavlm-kd | E1 + WavLM teacher KD | cancelled |
+| E3-b4-dame-wavlm-b6-kd | E2 + raw B6 teacher KD | cancelled |
+| E4-b6-teacher-finetune | B6 (12.5M, teacher only) fine-tuned on the two-view noisy data | proposed |
+| E5-c2-continue-kd | start from the teammate's compressed B6 (C2), two-view noisy data + KD from E4 | proposed, needs approval (C2 was excluded) |
+| E6-b4-kd | B4 + E0 recipe + KD from E4 | proposed |
+| E7-b6-compress-kd | compress E4 to < 7M with the teammate's low-rank method, then recover with KD | proposed, needs the teammate's training code |
+
+Reference points that are not our experiments keep descriptive names: "teammate's C2 model", "previous submission
+(C2X soup)", "zero-shot B4".
+
 # 0. Locked decisions (2026-10-24) — these override any conflicting text below
 
 **Scope split.** This plan covers the *training pipeline*. The *data* (crops, noise, sampling) follows `README.md`:

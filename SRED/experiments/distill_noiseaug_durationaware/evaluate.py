@@ -62,8 +62,10 @@ def load_student(spec: str):
 
 
 @torch.inference_mode()
-def embed(model, items, dev="cuda"):
-    """items: list of (key, file, start, length or None = whole file) -> {key: normalized embedding}."""
+def embed(model, items, dev="cuda", normalize=True):
+    """items: list of (key, file, start, length or None = whole file) -> {key: embedding} (L2-normalised unless
+    normalize=False, e.g. to score prefixes z[:d] on their own)."""
+    nrm = (lambda z: F.normalize(z, dim=1)) if normalize else (lambda z: z)  # noqa: E731
     out = {}
     groups = defaultdict(list)
     for it in items:
@@ -73,13 +75,13 @@ def embed(model, items, dev="cuda"):
             for key, f, _, _ in its:
                 x, _ = sf.read(str(SILVER / f), dtype="float32")
                 with torch.autocast("cuda", dtype=torch.bfloat16):
-                    out[key] = F.normalize(model(torch.from_numpy(x)[None].to(dev)).float(), dim=1)[0].cpu().numpy()
+                    out[key] = nrm(model(torch.from_numpy(x)[None].to(dev)).float())[0].cpu().numpy()
             continue
         for i in range(0, len(its), BS):
             ch = its[i:i + BS]
             x = np.stack([sf.read(str(SILVER / f), start=s, frames=L, dtype="float32")[0] for _, f, s, _ in ch])
             with torch.autocast("cuda", dtype=torch.bfloat16):
-                e = F.normalize(model(torch.from_numpy(x).to(dev)).float(), dim=1).cpu().numpy()
+                e = nrm(model(torch.from_numpy(x).to(dev)).float()).cpu().numpy()
             out.update({k: v for (k, _, _, _), v in zip(ch, e)})
     return out
 
