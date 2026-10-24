@@ -4,7 +4,7 @@ every CLEAN crop of the crop bank, row i = crop i.
     .venv/bin/python experiments/distill_noiseaug_durationaware/prep/cache_b6.py               # all 859,684 crops
     .venv/bin/python experiments/distill_noiseaug_durationaware/prep/cache_b6.py --limit 1000  # test: first 1,000 crops
     .venv/bin/python experiments/distill_noiseaug_durationaware/prep/cache_b6.py \
-        --ckpt runs/E4-b6-teacher-finetune/avg5k-8k.pt --out e4avg                           # a fine-tuned B6 (E5 teacher)
+        --ckpt runs/E4-b6-teacher-finetune/step6000.pt --out e4s6000                         # a fine-tuned B6 (E5 teacher)
 
 Writes artifacts/teacher_cache/b6.npy (float16 [859684, 192], rows L2-normalised in float32) + b6.json. Crops of one bin
 share a length, so batches hold one bin: no padding, no truncation. Checks before writing the .json: no all-zero row,
@@ -94,7 +94,8 @@ def run(model, ds, ids, max_audio_s, workers, precision, log_every=200):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0, help="only the first N crops (test); writes <out>_testN.npy")
-    ap.add_argument("--ckpt", help="train.py checkpoint (relative to the experiment): its \"model\" weights replace B6's")
+    ap.add_argument("--ckpt", help="train.py checkpoint (relative to the experiment or to SRED/): its \"model\" weights "
+                    "replace B6's")
     ap.add_argument("--out", default="b6", help="cache name: artifacts/teacher_cache/<out>.npy + .json")
     ap.add_argument("--max-audio-s", type=float, default=512, help="audio seconds per batch")
     ap.add_argument("--workers", type=int, default=16)
@@ -108,7 +109,9 @@ def main():
     ids = np.arange(args.limit or n)
     model = _load_redimnet2_pt(EXP / MODEL)
     if args.ckpt:
-        model.load_state_dict(torch.load(EXP / args.ckpt, map_location="cpu", weights_only=False)["model"])
+        ckpt = (EXP / args.ckpt) if (EXP / args.ckpt).exists() else (SRED / args.ckpt).resolve()
+        args.ckpt = str(ckpt.relative_to(EXP))  # recorded in the json relative to the experiment
+        model.load_state_dict(torch.load(ckpt, map_location="cpu", weights_only=False)["model"])
     model = model.cuda().eval()
 
     t0 = time.time()
