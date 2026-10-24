@@ -1,0 +1,10 @@
+{
+  "manifest.jsonl": "3e812ab8d273eb7a",
+  "crop_bank.npz": "3a3499fbd42c2a78",
+  "lists/rir_bank.npz": "32dd50b5dfb45f0c",
+  "lists/musan_bank.npz": "dc585c4c1a7b8001",
+  "lists/realnoise_bank.npz": "3752564cd3a87852",
+  "pretrained/redimnet2/b4-vox2-lm.pt": "4f0b1e8bc6bcc104",
+  "pretrained/redimnet2/b6-vb2+vox2+cnc2_v0-lm.pt": "287365f6f485b19e",
+  "pretrained/wavlm/wavlm_large.pth": "8c1e5637ae88657f"
+}

@@ -43,5 +43,13 @@ SRED/exp/analysis/scores/
 SRED/exp/analysis/listen/
 # per-split duration caches written by sred.evaluate (the original public ones stay tracked)
 SRED/lists/*_durations.npy
+# MUSAN / RIRS_NOISES banks (scripts/make_ext_banks.py rebuilds them; 1.5 GB)
+SRED/lists/rir_bank.npz
+SRED/lists/musan_bank.npz
 # local submission dry-runs
 SRED/submissions/
+# distill-noiseaug-durationaware run outputs (checkpoints, logs, inspection wavs)
+SRED/experiments/*/runs/
+# distill-noiseaug-durationaware: rebuildable artifacts (prep/*.py) and pretrained weights (1.3 GB)
+SRED/experiments/*/artifacts/
+SRED/experiments/*/pretrained/

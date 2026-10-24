@@ -1,0 +1,29 @@
+{
+  "_doc": "Data-loader config (NEW_PLAN §0, README). Paths: manifest / crop_bank relative to this experiment folder, banks relative to SRED/. Override any key with --set a.b=value. Training settings live with the training pipeline, not here.",
+
+  "manifest": "artifacts/manifest.jsonl",
+  "crop_bank": "artifacts/crop_bank.npz",
+  "speakers_per_step": 32,
+  "views": {
+    "short_bins": [0.5, 0.75, 1.0, 1.25, 1.5, 2.0],
+    "long_bins": [2.5, 3.0, 4.0, 5.0, 6.0]
+  },
+
+  "banks": {
+    "rir": "lists/rir_bank.npz",
+    "noise": "lists/musan_bank.npz",
+    "train_bg": "lists/realnoise_bank.npz"
+  },
+  "aug": {
+    "p_reverb": 0.3,
+    "rir_cats": {"sim_small": 1, "sim_medium": 1, "sim_large": 1, "real": 1},
+    "p_noise": 0.6,
+    "noise_cats": {"musan_noise": 1, "musan_music": 1, "musan_speech": 1,
+                   "rirs_pointsource": 1, "rirs_isotropic": 1, "train_bg": 1},
+    "snr": {"musan_noise": [0, 15], "musan_music": [5, 15], "musan_speech": [13, 20],
+            "rirs_pointsource": [0, 15], "rirs_isotropic": [0, 15], "train_bg": [3, 18]},
+    "babble_talkers": [3, 7],
+    "p_shared": 0.5, "snr_shared": [3, 18], "shared_exclusive": true,
+    "channel": {"p_band": 0.2, "p_eq": 0.3, "p_mulaw": 0.1}
+  }
+}
