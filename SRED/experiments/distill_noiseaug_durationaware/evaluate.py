@@ -7,12 +7,18 @@ embeddings on the silver audio (public labels), no calibration, no TTA.
 
 Reports EER (%) for: silver all / cleaned / private-like weighting, the natural buckets of the shorter side's speech
 (<0.75, 0.75-1, 1-2, 2-3, >3 s), and the controlled conditions full-full, full-3/2/1/0.75/0.5 s, 2s-2s, 1s-1s
-(artifacts/duration_eval), plus minDCF(0.01) on silver all. Results: runs/_eval/<run>__<ckpt>.json.
+(artifacts/duration_eval), plus minDCF(0.01) on silver all. Results: runs/_eval/<run>__<ckpt>[<suffix>].json.
+
+Needs only artifacts/duration_eval/ (trials, crops, conditions, silver_weights.npz) and the silver audio
+(default SRED/data/public_rumble_v2; override with SILVER_DIR=...). Another server passes --suffix __<server> so its
+JSONs never overwrite the reference server's.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
+import socket
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -27,10 +33,10 @@ EXP = Path(__file__).resolve().parent
 SRED = EXP.parents[1]
 sys.path[:0] = [str(SRED), str(SRED / "scripts"), str(EXP)]
 
-from sred.data import read_trials  # noqa: E402
+from prep.build_eval_weights import pairs_hash  # noqa: E402
 from sred.metrics import compute_min_dcf  # noqa: E402
 
-SILVER = SRED / "data/public_rumble_v2"
+SILVER = Path(os.environ.get("SILVER_DIR", SRED / "data/public_rumble_v2"))
 DEV = EXP / "artifacts/duration_eval"
 OUT = EXP / "runs/_eval"
 BS = 64
@@ -78,7 +84,7 @@ def embed(model, items, dev="cuda"):
     return out
 
 
-def evaluate(spec):
+def evaluate(spec, suffix=""):
     model, tag = load_student(spec)
     model = model.cuda().eval()
     tr = pd.read_csv(DEV / "trials.csv")
@@ -95,16 +101,14 @@ def evaluate(spec):
         b = np.stack([E[(eb, f)] for f in tr.b.to_numpy()[idx]])
         return (a * b).sum(1)
 
-    import c2_eval as C  # private-like weights and the cleaned-list flags used in the C2X report
-    pairs, y_pub = read_trials()
-    assert list(map(tuple, tr[["a", "b"]].to_numpy())) == [tuple(p) for p in pairs]
-    w = C.private_like_weights(pairs, y_pub)
-    cl = pd.DataFrame(pairs, columns=["file_a", "file_b"]).merge(pd.read_csv(C.META), how="left") \
-        .in_cleaned.fillna(False).to_numpy(bool)
+    sw = np.load(DEV / "silver_weights.npz")  # frozen private-like weights + cleaned flags (prep/build_eval_weights.py)
+    assert str(sw["pairs_sha256"]) == pairs_hash(tr.a, tr.b), "silver_weights.npz does not match trials.csv"
+    w, cl = sw["private_like"], sw["in_cleaned"]
 
     every = np.arange(len(tr))
     s_full = score("full", "full", every)
-    r = {"tag": tag, "silver_all": eer(s_full, y), "silver_cleaned": eer(s_full[cl], y[cl]),
+    tag += suffix
+    r = {"tag": tag, "host": socket.gethostname(), "silver_all": eer(s_full, y), "silver_cleaned": eer(s_full[cl], y[cl]),
          "silver_private_like": eer(s_full, y, w), "silver_minDCF": float(compute_min_dcf(s_full, y))}
     for name, c in conds.items():
         idx = np.array(c["trials"], int)
@@ -125,7 +129,7 @@ COLS = ["silver_all", "silver_cleaned", "silver_private_like", "natural <0.75s",
 
 def table():
     rows = [json.loads(p.read_text()) for p in sorted(OUT.glob("*.json"))]
-    df = pd.DataFrame(rows).set_index("tag")[COLS]
+    df = pd.DataFrame(rows).set_index("tag").reindex(columns=COLS)
     df.columns = [c.replace("silver_", "").replace("natural ", "") for c in COLS]
     print(df.round(3).to_string())
 
@@ -134,10 +138,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("ckpts", nargs="*")
     ap.add_argument("--table", action="store_true")
+    ap.add_argument("--suffix", default="", help="appended to the result name, e.g. __l40s on another server")
     a = ap.parse_args()
     for c in a.ckpts:
-        r = evaluate(c)
-        print(r["tag"], " ".join(f"{k}={v:.3f}" for k, v in r.items() if k != "tag"), flush=True)
+        r = evaluate(c, a.suffix)
+        print(r["tag"], " ".join(f"{k}={v:.3f}" for k, v in r.items() if k not in ("tag", "host")), flush=True)
     if a.table or not a.ckpts:
         table()
 
