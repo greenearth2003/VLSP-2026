@@ -11,13 +11,22 @@ name; E0 / E1 keep their folders (`runs/E0`, `runs/E1`) so existing HF paths and
 | E1-b4-dame | E0 + DAME-SW prefix heads (run folder E1) | done: NO-GO at the gate (worse on every short-duration metric) |
 | E2-b4-dame-wavlm-kd | E1 + WavLM teacher KD | cancelled |
 | E3-b4-dame-wavlm-b6-kd | E2 + raw B6 teacher KD | cancelled |
-| E4-b6-teacher-finetune | B6 (12.5M, teacher only) fine-tuned on the two-view noisy data | proposed |
-| E5-c2-continue-kd | start from the teammate's compressed B6 (C2), two-view noisy data + KD from E4 | proposed, needs approval (C2 was excluded) |
-| E6-b4-kd | B4 + E0 recipe + KD from E4 | proposed |
-| E7-b6-compress-kd | compress E4 to < 7M with the teammate's low-rank method, then recover with KD | proposed, needs the teammate's training code |
+| E4-b6-teacher-finetune | approved B6 (12.5M, teacher only) trained with exactly the E0 recipe (configs/e4.json) | running on B; gate: must beat E0-b4-finetune on silver incl. short buckets |
+| E5-b6-lowrank-kd | our own low-rank (SVD) compression of E4 to < 7M, then recovery on the two-view noisy data with KD from E4's cached clean-crop embeddings | next, main line |
+| E6-b4-kd | B4 + E0 recipe + KD from E4 | next, comparison |
+| E7-b6-prune-kd | our structured channel pruning (sred/prune.py) of E4 to < 7M + the same KD recovery | next, alternative compression |
 
 Reference points that are not our experiments keep descriptive names: "teammate's C2 model", "previous submission
 (C2X soup)", "zero-shot B4".
+
+Independence rule (user, 2026-10-24): no teammate checkpoints or code (C2, its fine-tuned B6, its compression
+scripts). Everything from E4 on starts from the approved pretrained weights and our own code.
+
+E1 debug (2026-10-24): scoring E1 with prefixes z[:24 / 48 / 96] gives WORSE short-duration EER than E0's untrained
+prefixes (natural <0.75s at 24 / 48-D: 31.6 / 29.0 vs 29.1 / 24.9), and the full 192-D embedding got ≈ 2.7x less
+short-crop supervision in E1 (short-view weight 0.375 on average x C_short 0.5 for 192-D). DAME-SW on a pretrained
+model moved short-duration learning into low-dimensional heads that cannot separate 1,823 speakers; DAME is dropped
+for fine-tuning.
 
 # 0. Locked decisions (2026-10-24) — these override any conflicting text below
 

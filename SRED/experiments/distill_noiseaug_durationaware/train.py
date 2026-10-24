@@ -145,13 +145,16 @@ def main(argv=None):
 
     loader, info = build_loader(dcfg, seed=a.seed, workers=a.workers)
     n_cls = len(info["speakers"])
+    base_name = cfg.get("base_registry", BASE_NAME)
     model = _load_redimnet2_pt(EXP / cfg["student_ckpt"]).to(dev)
     n_params = sum(p.numel() for p in model.parameters())
-    assert n_params < 7_000_000, n_params
+    # teacher runs (e.g. E4-b6-teacher-finetune, 12.5M) are never submitted; every other run must fit the 7M limit
+    assert n_params < 7_000_000 or cfg.get("teacher_run", False), n_params
     model.eval()
     with torch.no_grad():
         emb_dim = model(torch.zeros(1, 32000, device=dev)).shape[-1]
-    cent = torch.from_numpy(load_or_build(model, info["manifest"], info["spk2id"], TRAIN_DIR, info["manifest_sha256"]))
+    cent = torch.from_numpy(load_or_build(model, info["manifest"], info["spk2id"], TRAIN_DIR, info["manifest_sha256"],
+                                           EXP / cfg.get("centroids", "artifacts/b4_centroids.npy")))
     model.train()
     objective = Objective(cfg["loss"], n_cls, emb_dim, cent if cfg["loss"].get("centroid_init", True) else None).to(dev)
     kd = Distill(cfg["kd"], emb_dim, dev).to(dev) if cfg.get("kd") else None
@@ -168,14 +171,14 @@ def main(argv=None):
             kd.proj.load_state_dict(r["kd_proj"])
         opt.load_state_dict(r["opt"])
         start = r["step"] + 1
-        loader.batch_sampler.seed = a.seed + start  # fresh crop stream after resume
+        loader.batch_sampler.start_step = start  # same batches as an uninterrupted run (batch k = f(seed, k))
         P(f"resumed from step {r['step']}")
     else:
         (out / "config.json").write_text(json.dumps({
             "train": cfg, "data": dcfg, "args": vars(a), "git": git_commit(), "params": n_params,
             "speakers": n_cls, "utterances": len(info["manifest"]), "manifest_sha256": info["manifest_sha256"],
             "crop_bank_sha_manifest": str(info["bank"]["manifest_sha256"])}, indent=2))
-    P(f"{a.name}: B4 {n_params:,} params, {n_cls} speakers, objective {cfg['loss']['type']} heads "
+    P(f"{a.name}: {base_name} {n_params:,} params{' (teacher run, not submittable)' if n_params >= 7_000_000 else ''}, {n_cls} speakers, objective {cfg['loss']['type']} heads "
       f"{objective.dims}, steps {cfg['steps']}, git {git_commit()}")
 
     H = cfg["optim"].get("head_only_steps", 0)
@@ -187,6 +190,7 @@ def main(argv=None):
     for step in range(start, last + 1):
         p = (step - 1) / cfg["steps"]
         b = next(it)
+        assert b["step"] == step, (b["step"], step)
         # head-only phase: student frozen (lr 0, run without autograd) while the new heads fit its embeddings
         head_only = step <= H
         m = 0.0 if head_only else lr_mult(step - 1, cfg, offset=H)
@@ -238,8 +242,8 @@ def main(argv=None):
             run = {"loss": 0.0, "n": 0, "t0": time.time(), "per": {}, "kd": {}}
         if step % cfg["save_every"] == 0 or step == last:
             sd = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
-            torch.save({"base_model": BASE_NAME, "model": sd, "step": step, "run": a.name}, out / f"step{step}.pt")
-            torch.save({"base_model": BASE_NAME, "model": sd, "objective": objective.state_dict(),
+            torch.save({"base_model": base_name, "model": sd, "step": step, "run": a.name}, out / f"step{step}.pt")
+            torch.save({"base_model": base_name, "model": sd, "objective": objective.state_dict(),
                         "kd_proj": kd.proj.state_dict() if kd is not None else None,
                         "opt": opt.state_dict(), "step": step, "config": cfg}, out / "last.tmp")
             (out / "last.tmp").replace(out / "last.pt")

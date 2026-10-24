@@ -56,15 +56,16 @@ def centroids(model, manifest, spk2id, train_dir, device="cuda") -> np.ndarray:
     return cent / np.linalg.norm(cent, axis=1, keepdims=True)
 
 
-def load_or_build(model, manifest, spk2id, train_dir, man_hash: str) -> np.ndarray:
-    meta = OUT.with_suffix(".json")
-    if OUT.exists() and meta.exists() and json.loads(meta.read_text()).get("manifest_sha256") == man_hash:
-        return np.load(OUT)
+def load_or_build(model, manifest, spk2id, train_dir, man_hash: str, out: Path = OUT) -> np.ndarray:
+    """Centroids of `model` cached at `out` (one file per pretrained model, e.g. b4_ / b6_centroids.npy)."""
+    meta = out.with_suffix(".json")
+    if out.exists() and meta.exists() and json.loads(meta.read_text()).get("manifest_sha256") == man_hash:
+        return np.load(out)
     was_training = model.training
     model.eval()
     c = centroids(model, manifest, spk2id, train_dir)
     model.train(was_training)
-    np.save(OUT, c)
+    np.save(out, c)
     meta.write_text(json.dumps({"manifest_sha256": man_hash, "speakers": len(spk2id), "cap_sec": CAP}))
     return c
 
