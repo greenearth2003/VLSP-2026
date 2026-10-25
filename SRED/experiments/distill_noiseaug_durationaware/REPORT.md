@@ -5,7 +5,7 @@ date: 2026-10-25
 branch: thucth-distill-noiseaug-durationaware
 code: SRED/experiments/distill_noiseaug_durationaware/
 hf_repo: pieceofcakee/vlsp2026 (private dataset; artifacts, weights, results under the same path)
-submission: submission-3.zip = E8-b6-lowrank-kd-continue step 5000 + final recipe
+submission: team submission 2 = E8-b6-lowrank-kd-continue step 5000 + final recipe (the only submission from this line)
 params: 6947208
 silver_eer_all_cleaned_privlike: [5.109, 3.764, 5.656]
 silver_minDCF: 0.375
@@ -15,7 +15,7 @@ silver_minDCF: 0.375
 
 ## 1. Summary
 
-**Submitted:** `E8-b6-lowrank-kd-continue` step 5000 (6.95M params) + final recipe. Silver EER (all / cleaned /
+**Submitted (team submission 2):** `E8-b6-lowrank-kd-continue` step 5000 (6.95M params) + final recipe. Silver EER (all / cleaned /
 private-like) **5.109 / 3.764 / 5.656**, minDCF 0.375 (independent re-run on the second server: 5.105 / 3.755 / 5.624).
 Earlier team best: 5.413 / 3.933 / 5.709. Teacher E4 (12.46M, not submittable): 4.645 / 3.079 / 4.868 with the recipe.
 
@@ -103,16 +103,12 @@ Cosine EER saturates by 4k steps. The fresh restart leaves cosine unchanged but 
 | WiSE α 0.5 / 0.7 / 0.8, cosine | 5.31 / 5.09 / 5.08 (priv-like 5.40 / 5.34 / 5.44) | 0.317–0.321 | α 0.7 |
 | **WiSE 0.7 + QMF2 + norm + speech + AS-norm** | **4.65 / 3.08 / 4.87** | 0.300 | final |
 
-## 6. Submissions (private: 278,410 trials, 37,354 files)
+## 6. Submission (private: 278,410 trials, 37,354 files)
 
-| File | System | Silver all / clean / priv-like |
-|---|---|---|
-| `submission-3.zip` (recommended) | E8 s5000 + recipe | 5.11 / 3.76 / 5.66 |
-| `submission-2.zip` | E5 s8000 + recipe | 5.33 / 3.90 / 5.70 |
-
-One `results.txt` per zip ("fileA fileB score", trial order); line count, pair order and finite scores checked.
-Submission-3 (sharded scorer on server B) agrees with an independent full re-run on server A at Spearman 0.999997
-(mean |Δ| 0.014, score s.d. 8.8); vs submission-2 0.995, vs the earlier team best 0.969.
+Team submission 2 = E8 s5000 + final recipe (silver 5.11 / 3.76 / 5.66); the only submission from this line.
+The zip holds one `results.txt` ("fileA fileB score", trial order); line count, pair order and finite scores checked.
+Scored on server B with a sharded scorer; an independent full re-run on server A agrees at Spearman 0.999997
+(mean |Δ| 0.014, score s.d. 8.8).
 
 ## 7. Reproduce and storage
 
@@ -135,7 +131,7 @@ $E/recipe.sh runs/E8-b6-lowrank-kd-continue/step5000.pt runs/E5-b6-lowrank-kd/st
 
 ## 8. Limitations and next steps
 
-- Gains ≤ 0.1 EER are within seed noise; submission-3 beats the earlier best by only 0.05 on private-like.
+- Gains ≤ 0.1 EER are within seed noise; the submission beats the earlier best by only 0.05 on private-like.
 - For E5 the calibrator hurts the < 0.75 s bucket (12.94 → 13.68); E8 does not show this.
 - Untried: utterance-balanced sampling (speaker-uniform sampling had seen 83 % of utterances by step 6000), B4 with
   KD from E4 (E6), structured pruning instead of low-rank (E7).
