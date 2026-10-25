@@ -15,6 +15,8 @@ DAME heads, teachers, optimizer) will be built on top of `build_loader`.
 
 From `sred/` the code imports only the data paths.
 
+**Results: see `REPORT.md`** (technical report: method, results, ablations, submissions, reproduction).
+
 ## Files
 
 | File | Role |
