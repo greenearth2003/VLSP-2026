@@ -21,6 +21,9 @@ import torch.nn.functional as F
 import torchaudio.functional as AF  # mu-law
 
 SR = 16000
+# SNR ranges (dB) per external-noise category; musan_speech is a 3-7 speaker babble (Kaldi / WeSpeaker recipe)
+MUSAN_SNR = {"musan_noise": (0, 15), "musan_music": (5, 15), "musan_speech": (13, 20),
+             "rirs_pointsource": (0, 15), "rirs_isotropic": (0, 15)}
 
 
 def _rms(x: torch.Tensor) -> torch.Tensor:
@@ -89,6 +92,51 @@ def pitch_shift(x: torch.Tensor, semitones: float) -> torch.Tensor:
     return resample_rate(time_stretch(x, 1 / f), f)
 
 
+def fill_from_bank(audio, off, T, rng, fade=800, keys=None):
+    """A noise track of exactly T samples built from several DIFFERENT bank segments joined by 50 ms crossfades,
+    starting at random points: no segment is looped. `keys` restricts the draw to those segment indices."""
+    out = np.zeros(T + fade, np.float32)
+    pos, ramp = 0, np.linspace(0, 1, fade, dtype=np.float32)
+    while pos < T:
+        k = int(rng.integers(len(off) - 1)) if keys is None else int(keys[rng.integers(len(keys))])
+        seg = audio[off[k]:off[k + 1]].astype(np.float32)
+        seg = seg[int(rng.integers(max(1, len(seg) // 2))):]
+        seg = seg / (np.sqrt(np.mean(seg ** 2)) + 1e-8)
+        L = min(len(seg), T + fade - pos)
+        piece = seg[:L].copy()
+        if pos > 0 and L > fade:
+            piece[:fade] *= ramp
+            out[pos:pos + fade] *= ramp[::-1]
+        out[pos:pos + L] += piece
+        pos += max(L - fade, 1)
+    return out[:T]
+
+
+def rumble_v2(nb, T, dev):
+    """Steady low drone (< ~150 Hz) + hum with harmonics (f0 45-120 Hz, fading up to ~4 kHz), generated over the whole
+    clip; level drifts with a smooth RANDOM envelope (no periodic swell, nothing looped). Matches the 'wave'
+    backgrounds of private clips: a bright constant band below 150 Hz and horizontal harmonic lines."""
+    f = torch.fft.rfftfreq(T, 1 / SR).to(dev)[None]
+    fc = torch.empty(nb, 1, device=dev).uniform_(60, 160)
+    drone = torch.fft.irfft(torch.randn(nb, f.shape[1], dtype=torch.cfloat, device=dev) / torch.sqrt(1 + (f / fc) ** 8), n=T)
+    drone = drone / _rms(drone)
+    t = torch.arange(T, device=dev).float()[None] / SR
+    f0 = torch.empty(nb, 1, device=dev).uniform_(45, 120)
+    hum = torch.zeros(nb, T, device=dev)
+    decay = torch.empty(nb, 1, device=dev).uniform_(0.25, 0.7)
+    for h in range(1, 40):
+        amp = decay ** (h - 1) * (f0 * h < 4000).float()
+        hum = hum + amp * torch.sin(2 * math.pi * f0 * h * (1 + 0.002 * torch.randn(nb, 1, device=dev)) * t
+                                    + torch.empty(nb, 1, device=dev).uniform_(0, 6.283))
+    hum = hum / _rms(hum)
+    mix = torch.empty(nb, 1, device=dev).uniform_(0.2, 0.8)
+    n = mix * drone + (1 - mix) * hum
+    # smooth random level drift: low-passed noise (< 0.5 Hz), +-3 dB
+    env = torch.fft.irfft(torch.randn(nb, f.shape[1], dtype=torch.cfloat, device=dev) * (f < 0.5).float(), n=T)
+    env = env / (env.abs().amax(-1, keepdim=True) + 1e-8)
+    return n * 10 ** (3 * env / 20)
+
+
 class Augmenter:
     def __init__(self, p_noise=0.6, p_reverb=0.3, p_band=0.2, p_eq=0.3, p_mulaw=0.1,
                  snr_babble=(13, 20), snr_noise=(5, 20), noise_bank: torch.Tensor | None = None,
@@ -97,12 +145,40 @@ class Augmenter:
                  p_tempo=0.0, tempo_range=(0.85, 1.15), p_gain=0.0, gain_db=(-20.0, 10.0),
                  p_timemask=0.0, timemask=(1, 3, 0.05, 0.25), p_freqmask=0.0, p_clip=0.0, n_groups=4,
                  p_overlap=0.0, snr_overlap=(5.0, 15.0), overlap_frac=(0.3, 1.0), noise_beta=(0.0, 2.0),
-                 p_matched=0.0, matched: dict | None = None, matched_snr_shift=0.0, matched_hiss_frac=0.2):
+                 p_matched=0.0, matched: dict | None = None, matched_snr_shift=0.0, matched_hiss_frac=0.2,
+                 p_shared=0.0, shared_bank: dict | None = None, snr_shared=(3.0, 18.0), p_shared_eq=0.0,
+                 p_rumble=0.0, snr_rumble=(-3.0, 8.0), rumble_version=1,
+                 rir_bank: dict | None = None, p_rir_bank=1.0,
+                 musan_bank: dict | None = None, p_musan=0.0, musan_cats=None, snr_musan: dict | None = None):
         self.__dict__.update(locals())
         del self.__dict__["self"]
+        # real RIRs (lists/rir_bank.npz): replace the synthetic RIR in a share p_rir_bank of the reverb draws
+        self.rir_t = torch.from_numpy(rir_bank["rir"].astype(np.float32)) if rir_bank is not None else None
+        # MUSAN / RIRS_NOISES noise (lists/musan_bank.npz): replace babble/coloured noise in a share p_musan of the
+        # noise draws; category drawn uniformly from musan_cats, SNR from snr_musan (Kaldi / WeSpeaker ranges)
+        if musan_bank is not None:
+            cats = musan_cats or sorted(set(musan_bank["cat"].tolist()))
+            self.musan_keys = {c: np.flatnonzero(musan_bank["cat"] == c) for c in cats}
+            assert all(len(k) for k in self.musan_keys.values()), f"unknown musan category in {cats}"
+            self.snr_musan = {**MUSAN_SNR, **(snr_musan or {})}
 
     def _rand(self, b, device):
         return torch.rand(b, device=device)
+
+    def musan_track(self, cat, T, rng):
+        """One external-noise track of T samples; musan_speech sums 3-7 different talkers (babble)."""
+        audio, off, keys = self.musan_bank["audio"], self.musan_bank["offsets"], self.musan_keys[cat]
+        if cat != "musan_speech":
+            return fill_from_bank(audio, off, T, rng, keys=keys)
+        return sum(fill_from_bank(audio, off, T, rng, keys=keys) for _ in range(int(rng.integers(3, 8))))
+
+    def mix_musan(self, x, cat=None, snr=None):
+        """Mix external noise into x [B, T]: category uniform over musan_cats unless given, SNR from its range."""
+        rng = np.random.default_rng(int(torch.randint(0, 2 ** 31 - 1, (1,))))
+        cats = [cat or list(self.musan_keys)[int(rng.integers(len(self.musan_keys)))] for _ in range(len(x))]
+        n = torch.from_numpy(np.stack([self.musan_track(c, x.shape[1], rng) for c in cats])).to(x.device)
+        s = [snr if snr is not None else rng.uniform(*self.snr_musan[c]) for c in cats]
+        return _mix_at_snr(x, n, torch.tensor(s, device=x.device, dtype=x.dtype)[:, None])
 
     @torch.no_grad()
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
@@ -175,12 +251,23 @@ class Augmenter:
         m = self._rand(B, dev) < self.p_reverb
         if m.any():
             rir = synth_rir(int(m.sum()), dev)
+            if self.rir_t is not None:
+                use = torch.rand(len(rir)) < self.p_rir_bank
+                if use.any():
+                    rir = F.pad(rir, (0, self.rir_t.shape[1] - rir.shape[1]))
+                    rir[use.to(dev)] = self.rir_t[torch.randint(0, len(self.rir_t), (int(use.sum()),))].to(dev)
             y = fft_conv(x[m], rir)
             x[m] = y * (_rms(x[m]) / _rms(y))
 
         m = self._rand(B, dev) < self.p_noise
         if m.any():
             idx = m.nonzero().squeeze(1)
+            if self.musan_bank is not None and self.p_musan > 0:
+                mu = (torch.rand(len(idx)) < self.p_musan).to(dev)
+                if mu.any():
+                    sel = idx[mu]
+                    x[sel] = self.mix_musan(x[sel])
+                idx = idx[~mu]
             kind = torch.randint(0, 3 if self.noise_bank is not None else 2, (len(idx),), device=dev)
             for k in range(3):
                 sel = idx[kind == k]
@@ -267,6 +354,59 @@ class Augmenter:
         if m.any():
             g = torch.empty(int(m.sum()), 1, device=dev).uniform_(*self.gain_db)
             x[m] = x[m] * 10 ** (g / 20)
+
+        # shared background (same-channel hard negatives): consecutive crops (0,1), (2,3), ... are different speakers
+        # (random sampler); with prob p_shared a pair gets the IDENTICAL real background segment, each at its own SNR
+        # draw, so "same background" stops meaning "same speaker". Bank: lists/realnoise_bank.npz.
+        if self.p_shared > 0 and self.shared_bank is not None and B >= 2:
+            # vectorised: one noise segment per chosen pair (tiled to T), both crops mixed in one call
+            audio, off = self.shared_bank["audio"], self.shared_bank["offsets"]
+            pairs = torch.arange(0, B - 1, 2)
+            pairs = pairs[torch.rand(len(pairs)) < self.p_shared]
+            if len(pairs):
+                rng = np.random.default_rng(int(torch.randint(0, 2 ** 31 - 1, (1,))))
+                segs = [fill_from_bank(audio, off, T, rng) for _ in range(len(pairs))]  # no looping
+                n = torch.from_numpy(np.stack(segs)).to(dev).repeat_interleave(2, 0)
+                idx = torch.stack([pairs, pairs + 1], 1).reshape(-1).to(dev)
+                snr = torch.empty(len(idx), 1, device=dev).uniform_(*self.snr_shared)
+                x[idx] = _mix_at_snr(x[idx], n, snr)
+                # same channel, not only the same room noise: one mic colouration per pair, applied to both crops
+                eq = pairs[torch.rand(len(pairs)) < self.p_shared_eq] if self.p_shared_eq > 0 else pairs[:0]
+                if len(eq):
+                    logf = torch.log(torch.fft.rfftfreq(T, 1 / SR).to(dev).clamp_min(20))[None]
+                    gain_db = torch.zeros(len(eq), logf.shape[1], device=dev)
+                    for _ in range(2):
+                        fc = torch.empty(len(eq), 1, device=dev).uniform_(math.log(150), math.log(6000))
+                        bw = torch.empty(len(eq), 1, device=dev).uniform_(0.3, 1.2)
+                        g = torch.empty(len(eq), 1, device=dev).uniform_(-8, 8)
+                        gain_db = gain_db + g * torch.exp(-0.5 * ((logf - fc) / bw) ** 2)
+                    gain_db = gain_db + torch.empty(len(eq), 1, device=dev).uniform_(-3, 3) * (logf - math.log(1000)) / math.log(2)
+                    j = torch.stack([eq, eq + 1], 1).reshape(-1).to(dev)
+                    x[j] = torch.fft.irfft(torch.fft.rfft(x[j]) * 10 ** (gain_db.repeat_interleave(2, 0) / 20), n=T)
+
+        # low-frequency rumble (13.8% of private clips, 0.2% of train): low-passed noise, cutoff 80-300 Hz, a slow
+        # 0.1-2 Hz swell, sometimes a 40-120 Hz hum; full-band SNR -3..8 dB (the flagged private backgrounds sit
+        # ~12 dB above the usual floor with 95-99% of their energy below 500 Hz)
+        m = self._rand(B, dev) < self.p_rumble if self.p_rumble > 0 else None
+        if m is not None and m.any() and self.rumble_version == 2:
+            idx = m.nonzero().squeeze(1)
+            x[idx] = _mix_at_snr(x[idx], rumble_v2(len(idx), T, dev),
+                                 torch.empty(len(idx), 1, device=dev).uniform_(*self.snr_rumble))
+        elif m is not None and m.any():
+            idx = m.nonzero().squeeze(1)
+            nb = len(idx)
+            f = torch.fft.rfftfreq(T, 1 / SR).to(dev)[None]
+            fc = torch.empty(nb, 1, device=dev).uniform_(80, 300)
+            resp = 1 / torch.sqrt(1 + (f / fc) ** 8)
+            n = torch.fft.irfft(torch.randn(nb, f.shape[1], dtype=torch.cfloat, device=dev) * resp, n=T)
+            t = torch.arange(T, device=dev).float()[None] / SR
+            hum = (torch.rand(nb, 1, device=dev) < 0.3).float()
+            n = n / _rms(n) + hum * 0.7 * torch.sin(2 * math.pi * torch.empty(nb, 1, device=dev).uniform_(40, 120) * t)
+            fm = torch.empty(nb, 1, device=dev).uniform_(0.1, 2.0)
+            depth = torch.empty(nb, 1, device=dev).uniform_(0.3, 0.9)
+            n = n * (1 + depth * torch.sin(2 * math.pi * fm * t + torch.empty(nb, 1, device=dev).uniform_(0, 6.283)))
+            snr = torch.empty(nb, 1, device=dev).uniform_(*self.snr_rumble)
+            x[idx] = _mix_at_snr(x[idx], n, snr)
 
         # keep amplitude in a sane range
         peak = x.abs().amax(-1, keepdim=True)

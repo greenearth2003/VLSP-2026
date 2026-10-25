@@ -163,11 +163,38 @@ REGISTRY = {
 }
 
 
+C2_PKG = Path("/mnt/tsharp/thucth/dataset/vlsp2026-sred/incoming/c2pkg")  # teammate's C2 package (code + weights)
+
+
+def _load_c2(pkg: Path) -> nn.Module:
+    """Teammate's C2: ReDimNet2-B6 with 14 low-rank layers (6,917,480 params), built from its package and loaded
+    weights-only (no arbitrary unpickling). Waveform [B, T] in, raw 192-d embedding out."""
+    import sys
+    for p in (str(pkg), str(pkg / "third_party")):
+        if p not in sys.path:
+            sys.path.insert(0, p)
+    from c2q3 import model as M
+    from redimnet2.redimnet2 import ReDimNet2Wrap
+    st = torch.load(pkg / "c2q3/assets/c2_model.pt", map_location="cpu", weights_only=True)
+    model = ReDimNet2Wrap(**dict(st["b6_cfg"]))
+    for name, r in st["ranks"].items():
+        m = model.get_submodule(name)
+        kind = "conv1d" if isinstance(m, nn.Conv1d) else "linear"
+        M._set_module(model, name, M.LowRank(kind, m.in_channels if kind == "conv1d" else m.in_features,
+                                             m.out_channels if kind == "conv1d" else m.out_features, r))
+    for name in st["drop"]:
+        M._set_module(model, name, nn.Identity())
+    model.load_state_dict(st["model"])
+    return model
+
+
 def load_model(name: str) -> nn.Module:
     """Load a pretrained model by registry name, or a fine-tuned checkpoint path (.pt
     produced by sred.train)."""
     if name not in REGISTRY and Path(name).exists():
         return load_finetuned(Path(name))
+    if name == "c2":
+        return _load_c2(C2_PKG).eval()
     kind, rel = REGISTRY[name]
     path = PRETRAINED / rel
     if kind == "v1":
@@ -195,6 +222,12 @@ def load_finetuned(ckpt: Path) -> nn.Module:
     if state.get("prune"):  # structurally pruned checkpoint (sred/prune.py): rebuild the slim architecture first
         from .prune import apply_indices
         apply_indices(model, state["prune"])
+    if state.get("expand"):  # function-preserving block expansion (sred/expand.py): rebuild the deeper architecture
+        from .expand import expand_model
+        expand_model(model, state["expand"], zero_init=False)
+    if state.get("denoiser"):  # learned denoising front-end (sred/denoise.py)
+        from .denoise import attach_denoiser
+        attach_denoiser(model, state["denoiser"])
     model.load_state_dict(state["model"])
     return model.eval()
 

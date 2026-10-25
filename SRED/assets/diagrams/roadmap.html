@@ -1,0 +1,372 @@
+<title>SRED Experiment Roadmap</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one lane per research track, experiments as cards left-to-right in the order they ran;
+   every card = id + status, max 3 key changes, EER on public and public + noise with delta vs E2b. */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --ink: #17212e;
+  --ink-2: #4a5568;
+  --ink-3: #6b7686;
+  --line: #d9dee6;
+  --accent: #1f5fa8;
+  --keep: #227a46;     --keep-bg: #e3f3e9;
+  --reject: #b4322a;   --reject-bg: #fbe7e5;
+  --run: #6a46c0;      --run-bg: #eee8fb;
+  --plan: #9a6413;     --plan-bg: #fbf0dc;
+  --better: #227a46;
+  --worse: #b4322a;
+  --f-display: "Bricolage Grotesque", "IBM Plex Sans", "Segoe UI", sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", "Helvetica Neue", sans-serif;
+  --f-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f141b; --surface: #171e28; --ink: #e6ebf2; --ink-2: #b3bdcb; --ink-3: #8a96a7; --line: #2a3442;
+    --accent: #6aa6ec;
+    --keep: #5fcf8b; --keep-bg: #183324; --reject: #f08077; --reject-bg: #3a1e1c;
+    --run: #b39bf2; --run-bg: #2a2242; --plan: #e6b25e; --plan-bg: #3a2e18;
+    --better: #5fcf8b; --worse: #f08077;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f141b; --surface: #171e28; --ink: #e6ebf2; --ink-2: #b3bdcb; --ink-3: #8a96a7; --line: #2a3442;
+  --accent: #6aa6ec;
+  --keep: #5fcf8b; --keep-bg: #183324; --reject: #f08077; --reject-bg: #3a1e1c;
+  --run: #b39bf2; --run-bg: #2a2242; --plan: #e6b25e; --plan-bg: #3a2e18;
+  --better: #5fcf8b; --worse: #f08077;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font: 15px/1.5 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 48px;
+}
+.wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+header.top { display: flex; flex-wrap: wrap; gap: 12px 32px; align-items: end; justify-content: space-between; }
+h1 { font: 700 clamp(26px, 4vw, 36px)/1.1 var(--f-display); margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.sub { margin: 6px 0 0; color: var(--ink-2); max-width: 70ch; }
+.stamp { font: 400 12.5px var(--f-mono); color: var(--ink-3); }
+
+.legend { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px;
+  display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: center; }
+.legend .group { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.legend .lab { font: 600 11px var(--f-body); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.legend p { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+.legend code { font: 400 12.5px var(--f-mono); }
+
+.pill { display: inline-flex; align-items: center; gap: 6px; font: 600 11.5px var(--f-body); letter-spacing: .04em;
+  text-transform: uppercase; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+.pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.keep   { color: var(--keep);   background: var(--keep-bg); }
+.reject { color: var(--reject); background: var(--reject-bg); }
+.run    { color: var(--run);    background: var(--run-bg); }
+.plan   { color: var(--plan);   background: var(--plan-bg); }
+.run::before { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .run::before { animation: none; } }
+
+section.lane { display: flex; flex-direction: column; gap: 12px; }
+.lane-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+.lane-head h2 { font: 700 19px/1.2 var(--f-display); margin: 0; }
+.lane-head span { color: var(--ink-3); font-size: 13.5px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 12px; }
+
+.exp { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 13px 14px 12px;
+  display: flex; flex-direction: column; gap: 8px; min-width: 0; border-top: 3px solid var(--stripe, var(--line)); }
+.exp[data-s="keep"]   { --stripe: var(--keep); }
+.exp[data-s="reject"] { --stripe: var(--reject); }
+.exp[data-s="run"]    { --stripe: var(--run); }
+.exp[data-s="plan"]   { --stripe: var(--plan); border-style: dashed; border-top-style: solid; }
+.exp.best { box-shadow: 0 0 0 2px var(--keep); }
+.exp .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.exp .id { font: 600 13px var(--f-mono); color: var(--accent); }
+.exp h3 { font: 600 15px/1.3 var(--f-body); margin: 0; }
+.exp ul { margin: 0; padding-left: 17px; color: var(--ink-2); font-size: 13.5px; display: flex; flex-direction: column; gap: 2px; }
+.exp .note { margin: 0; font-size: 12.5px; color: var(--ink-3); }
+
+.metrics { margin: auto 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; border-top: 1px solid var(--line); padding-top: 9px; }
+.metrics div { display: flex; flex-direction: column; gap: 1px; }
+.metrics dt { font: 600 10.5px var(--f-body); letter-spacing: .07em; text-transform: uppercase; color: var(--ink-3); }
+.metrics dd { margin: 0; font: 600 17px var(--f-mono); font-variant-numeric: tabular-nums; display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.metrics dd small { font: 400 12px var(--f-mono); }
+.metrics dd small.w { color: var(--worse); }
+.metrics dd small.b { color: var(--better); }
+.metrics dd small.n { color: var(--ink-3); }
+.metrics dd.na { color: var(--ink-3); font-size: 14px; font-weight: 400; }
+
+.decision { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.decision h3 { font: 600 14px var(--f-body); margin: 0 0 4px; }
+.decision p { margin: 0; color: var(--ink-2); font-size: 13.5px; }
+.decision .big { font: 600 15px var(--f-mono); color: var(--ink); }
+footer { color: var(--ink-3); font-size: 12.5px; }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>SRED experiment roadmap</h1>
+      <p class="sub">VLSP 2026 speaker verification on edge devices (≤ 7M parameters). Everything run on the new server since 18/10, what is running now, and what goes into the last private submission. Non-transductive scoring assumed.</p>
+    </div>
+    <div class="stamp">updated 21/10/2026 07:40 ICT · deadline 21/10 23:59</div>
+  </header>
+
+  <div class="legend" aria-label="Legend">
+    <div class="group">
+      <span class="lab">Status</span>
+      <span class="pill keep">Kept</span>
+      <span class="pill reject">Rejected</span>
+      <span class="pill run">Running</span>
+      <span class="pill plan">Not run</span>
+    </div>
+    <div class="group">
+      <span class="lab">Numbers</span>
+      <p>EER %, lower is better, on the public test's 49,993 trials with noise added. <b>Synthetic</b> = synthetic noise matched to the private set's levels (it predicted K21's private score: 8.31 vs 8.32). <b>Real noise</b> = real background noise from train recordings, spectrally closest to private. Small figure = change vs E2b, <span style="color:var(--worse)">red worse</span>, <span style="color:var(--better)">green better</span>. Notes give the silver set (real noise + rumble) where measured.</p>
+    </div>
+  </div>
+
+  <section class="lane">
+    <div class="lane-head"><h2>Baselines</h2><span>from the old server, reproduced here</span></div>
+    <div class="cards">
+      <article class="exp" data-s="keep">
+        <div class="row"><span class="id">K21</span><span class="pill keep">Submitted</span></div>
+        <h3>ReDimNet-M student</h3>
+        <ul><li>4.81M ReDimNet-M, distilled from fine-tuned B6 (12.5M)</li><li>short noisy crop → teacher's clean full-utterance embedding</li><li>WiSE 0.5 with the pretrained weights</li></ul>
+        <p class="note">Private leaderboard 8.32 · clean public 4.50</p>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd>8.30 <small class="w">+0.38</small></dd></div><div><dt>Real noise</dt><dd>6.63 <small class="w">+0.18</small></dd></div></dl>
+      </article>
+      <article class="exp" data-s="keep">
+        <div class="row"><span class="id">E2b</span><span class="pill keep">Reference</span></div>
+        <h3>SphereFace2 loss</h3>
+        <ul><li>K21 recipe with SphereFace2 instead of AAM</li><li>same distillation and WiSE 0.5</li><li>reference for every comparison below</li></ul>
+        <p class="note">Clean public 4.48 · silver 6.51</p>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd>7.92 <small class="n">ref</small></dd></div><div><dt>Real noise</dt><dd>6.45 <small class="n">ref</small></dd></div></dl>
+      </article>
+    </div>
+  </section>
+
+  <section class="lane">
+    <div class="lane-head"><h2>Noise augmentation</h2><span>E2b recipe retrained from pretrained M with more or private-like noise, 18k steps + WiSE 0.5</span></div>
+    <div class="cards">
+      <article class="exp" data-s="reject">
+        <div class="row"><span class="id">N10</span><span class="pill reject">Rejected</span></div>
+        <h3>Heavy generic noise</h3>
+        <ul><li>SphereFace2, noisier generic augmentation</li></ul>
+        <p class="note">Best on synthetic, worse on real noise</p>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd>7.78 <small class="b">−0.14</small></dd></div><div><dt>Real noise</dt><dd>6.61 <small class="w">+0.16</small></dd></div></dl>
+      </article>
+      <article class="exp" data-s="reject">
+        <div class="row"><span class="id">N11</span><span class="pill reject">Rejected</span></div>
+        <h3>Heavy noise, AAM loss</h3>
+        <ul><li>as N10 with AAM instead of SphereFace2</li></ul>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd>8.26 <small class="w">+0.34</small></dd></div><div><dt>Real noise</dt><dd>6.99 <small class="w">+0.54</small></dd></div></dl>
+      </article>
+      <article class="exp" data-s="reject">
+        <div class="row"><span class="id">M1</span><span class="pill reject">Rejected</span></div>
+        <h3>Matched noise 50%</h3>
+        <ul><li>noise with private-set spectra on 50% of crops</li><li>SNR drawn from the private distribution</li></ul>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd>7.94 <small class="w">+0.02</small></dd></div><div><dt>Real noise</dt><dd>6.39 <small class="b">−0.06</small></dd></div></dl>
+      </article>
+      <article class="exp" data-s="reject">
+        <div class="row"><span class="id">M2</span><span class="pill reject">Rejected</span></div>
+        <h3>Matched noise 80%</h3>
+        <ul><li>matched noise on 80% of crops</li></ul>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd>8.25 <small class="w">+0.33</small></dd></div><div><dt>Real noise</dt><dd>6.54 <small class="w">+0.09</small></dd></div></dl>
+      </article>
+      <article class="exp" data-s="reject">
+        <div class="row"><span class="id">M3</span><span class="pill reject">Rejected</span></div>
+        <h3>Matched 80%, 5 dB harder</h3>
+        <ul><li>matched noise on 80% of crops</li><li>SNR 5 dB below the private distribution</li></ul>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd>8.32 <small class="w">+0.40</small></dd></div><div><dt>Real noise</dt><dd>6.52 <small class="w">+0.07</small></dd></div></dl>
+      </article>
+      <article class="exp" data-s="reject">
+        <div class="row"><span class="id">M4</span><span class="pill reject">Rejected</span></div>
+        <h3>Matched-noise curriculum</h3>
+        <ul><li>matched noise ramps 30% → 90% of crops over training</li><li>SNR matched to private</li></ul>
+        <p class="note">Tie on synthetic; overtaken by X2</p>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd>7.98 <small class="w">+0.06</small></dd></div><div><dt>Real noise</dt><dd>6.38 <small class="b">−0.07</small></dd></div></dl>
+      </article>
+    </div>
+  </section>
+
+  <section class="lane">
+    <div class="lane-head"><h2>Denoiser front-end and capacity</h2><span>learned denoiser before the backbone, or more layers; fine-tuned from E2b or retrained</span></div>
+    <div class="cards">
+      <article class="exp" data-s="keep">
+        <div class="row"><span class="id">D00</span><span class="pill keep">Control</span></div>
+        <h3>Same fine-tuning, no denoiser</h3>
+        <ul><li>E2b + 6k more steps on the D-series data</li><li>separates fine-tuning cost from denoiser effect</li></ul>
+        <p class="note">Fine-tuning a finished model costs on its own</p>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd>8.17 <small class="w">+0.25</small></dd></div><div><dt>Real noise</dt><dd>6.72 <small class="w">+0.27</small></dd></div></dl>
+      </article>
+      <article class="exp" data-s="reject">
+        <div class="row"><span class="id">D01</span><span class="pill reject">Rejected</span></div>
+        <h3>Denoiser, light aux loss</h3>
+        <ul><li>48-channel denoiser, +0.13M (4.94M total)</li><li>2k steps denoiser-only, then joint training</li><li>reconstruction loss weight ×1</li></ul>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd>8.63 <small class="w">+0.71</small></dd></div><div><dt>Real noise</dt><dd>6.65 <small class="w">+0.20</small></dd></div></dl>
+      </article>
+      <article class="exp" data-s="reject">
+        <div class="row"><span class="id">D03</span><span class="pill reject">Rejected</span></div>
+        <h3>Denoiser, strong aux loss</h3>
+        <ul><li>as D01 with reconstruction loss ×5</li></ul>
+        <p class="note">Keeping it a denoiser costs speaker information</p>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd>8.85 <small class="w">+0.93</small></dd></div><div><dt>Real noise</dt><dd>7.14 <small class="w">+0.69</small></dd></div></dl>
+      </article>
+      <article class="exp" data-s="reject">
+        <div class="row"><span class="id">D02b</span><span class="pill reject">Rejected</span></div>
+        <h3>Denoiser + deeper backbone</h3>
+        <ul><li>D03 denoiser (48 ch, aux ×5)</li><li>zero-gated copies of pretrained blocks, 6.58M</li></ul>
+        <p class="note">D02 (64 ch) ran out of memory</p>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd>8.91 <small class="w">+0.99</small></dd></div><div><dt>Real noise</dt><dd>7.09 <small class="w">+0.64</small></dd></div></dl>
+      </article>
+      <article class="exp" data-s="reject">
+        <div class="row"><span class="id">X1</span><span class="pill reject">Rejected</span></div>
+        <h3>More layers, E2b recipe</h3>
+        <ul><li>zero-gated pretrained block copies, 6.45M</li><li>no denoiser (clean test of capacity)</li></ul>
+        <p class="note">Quick check +0.32 at the WiSE step; overfits (train acc 0.94)</p>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd class="na">stopped</dd></div><div><dt>Real noise</dt><dd class="na">stopped</dd></div></dl>
+      </article>
+      <article class="exp" data-s="reject">
+        <div class="row"><span class="id">A1</span><span class="pill reject">Rejected</span></div>
+        <h3>AdaFace-style margin</h3>
+        <ul><li>SphereFace2 margin 0.1–0.3 by embedding norm</li></ul>
+        <p class="note">Quick checks +0.10 / +0.45 at 4k / 8k steps</p>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd class="na">stopped</dd></div><div><dt>Real noise</dt><dd class="na">stopped</dd></div></dl>
+      </article>
+    </div>
+  </section>
+
+  <section class="lane">
+    <div class="lane-head"><h2>Same-channel impostors</h2><span>private's impostor pairs share recording channel and gender; train the model to separate them</span></div>
+    <div class="cards">
+      <article class="exp" data-s="keep">
+        <div class="row"><span class="id">X2</span><span class="pill keep">Kept</span></div>
+        <h3>Shared background pairs</h3>
+        <ul><li>E2b recipe retrained from pretrained M</li><li>pairs of different speakers get the identical real background (p 0.5)</li></ul>
+        <p class="note">Private-like real noise 6.86 → 6.34 · silver 6.19</p>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd>8.00 <small class="w">+0.08</small></dd></div><div><dt>Real noise</dt><dd>6.05 <small class="b">−0.40</small></dd></div></dl>
+      </article>
+      <article class="exp" data-s="reject">
+        <div class="row"><span class="id">X3</span><span class="pill reject">Rejected</span></div>
+        <h3>X2 + noisy teacher KD</h3>
+        <ul><li>B6 teacher sees the same noisy crops (online)</li><li>relational KD on batch similarities</li></ul>
+        <p class="note">Quick checks +0.16 / +0.38 at 4k / 8k</p>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd class="na">stopped</dd></div><div><dt>Real noise</dt><dd class="na">stopped</dd></div></dl>
+      </article>
+      <article class="exp" data-s="keep">
+        <div class="row"><span class="id">S3</span><span class="pill keep">Kept</span></div>
+        <h3>Weight soup E2b + X2</h3>
+        <ul><li>50/50 average of the two models' weights</li><li>one 4.81M model, no extra cost</li></ul>
+        <p class="note">Silver 6.26 (cleaned list 4.82)</p>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd>7.94 <small class="w">+0.02</small></dd></div><div><dt>Real noise</dt><dd>6.08 <small class="b">−0.37</small></dd></div></dl>
+      </article>
+      <article class="exp" data-s="reject">
+        <div class="row"><span class="id">R1</span><span class="pill reject">Rejected</span></div>
+        <h3>Robust-v1</h3>
+        <ul><li>X2 + low-frequency rumble (private's "wave" sounds)</li><li>+ energy-based short speech crops 0.75–1.5 s</li></ul>
+        <p class="note">≈ X2; short clips not improved · silver 6.30</p>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd>8.00 <small class="w">+0.08</small></dd></div><div><dt>Real noise</dt><dd>6.00 <small class="b">−0.45</small></dd></div></dl>
+      </article>
+      <article class="exp" data-s="reject">
+        <div class="row"><span class="id">X4</span><span class="pill reject">Rejected</span></div>
+        <h3>Similar-voice pairs</h3>
+        <ul><li>X2 + the pair's 2nd speaker is one of the 10 closest voices</li><li>+ identical mic colouring on shared-background pairs</li></ul>
+        <p class="note">Quick checks +0.53 / +0.45 at 4k / 8k (X2: +0.26 / −0.24); stopped at 8.6k</p>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd class="na">stopped</dd></div><div><dt>Real noise</dt><dd class="na">stopped</dd></div></dl>
+      </article>
+    </div>
+  </section>
+
+  <section class="lane">
+    <div class="lane-head"><h2>Scoring at test time</h2><span>no retraining; non-transductive unless marked</span></div>
+    <div class="cards">
+      <article class="exp" data-s="keep">
+        <div class="row"><span class="id">MS</span><span class="pill keep">Kept</span></div>
+        <h3>Multi-speaker pair scoring</h3>
+        <ul><li>two-voice clips → 2 cluster centroids</li><li>score = full cosine + 0.25 × (best speaker pair − full)</li></ul>
+        <p class="note">Never worse; large gain only on clips with a second speaker. Silver with S3: 6.27 → 6.23</p>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd>7.91 <small class="b">−0.01</small></dd></div><div><dt>Real noise</dt><dd>6.43 <small class="b">−0.02</small></dd></div></dl>
+      </article>
+      <article class="exp" data-s="reject">
+        <div class="row"><span class="id">WS</span><span class="pill reject">Rejected</span></div>
+        <h3>Best-match windows</h3>
+        <ul><li>1 s or 2 s speech windows, best window pair</li><li>calibrated on train</li></ul>
+        <p class="note">Soup: 1 s 8.27 vs 7.94 synthetic; 2 s silver 6.50 vs 6.27. Its filter kept ~1 window per noisy clip</p>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd>8.27 <small class="w">+0.35</small></dd></div><div><dt>Real noise</dt><dd>6.27 <small class="b">−0.18</small></dd></div></dl>
+      </article>
+      <article class="exp" data-s="reject">
+        <div class="row"><span class="id">CH</span><span class="pill reject">Rejected</span></div>
+        <h3>Long clips → 2 s chunks, max</h3>
+        <ul><li>only clips over 8 s</li><li>all chunks (1 s hop) vs the other clip, take the max</li></ul>
+        <p class="note">Silver, that segment: 5.54 → 6.15; overall +0.27. Long clips are already the easiest segment</p>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd class="na">not run</dd></div><div><dt>Real noise</dt><dd class="na">not run</dd></div></dl>
+      </article>
+      <article class="exp" data-s="reject">
+        <div class="row"><span class="id">TL</span><span class="pill reject">Rejected</span></div>
+        <h3>Short clips tiled to 3 s</h3>
+        <ul><li>only clips under 2 s</li><li>energy-trimmed, then repeated to 3 s</li></ul>
+        <p class="note">Helps silver, worse on real noise (6.13 vs 6.08 for S3)</p>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd>7.93 <small class="w">+0.01</small></dd></div><div><dt>Real noise</dt><dd>6.13 <small class="b">−0.32</small></dd></div></dl>
+      </article>
+      <article class="exp best" data-s="keep">
+        <div class="row"><span class="id">SG</span><span class="pill keep">Current best</span></div>
+        <h3>Segment-gated energy trimming</h3>
+        <ul><li>only where a clip is &lt; 50% speech, has &lt; 1 s speech, or levels differ &gt; 10 dB</li><li>there: whole-clip + energy-trimmed embedding (no VAD model)</li><li>everything else unchanged (30% of private)</li></ul>
+        <p class="note">On S3: synthetic 7.94 → 7.79, real 6.08 → 6.05, silver 6.26 → 6.16. Speaker bootstrap P 0.98 / 0.91 / 0.89</p>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd>7.79 <small class="b">−0.13</small></dd></div><div><dt>Real noise</dt><dd>6.05 <small class="b">−0.40</small></dd></div></dl>
+      </article>
+      <article class="exp" data-s="plan">
+        <div class="row"><span class="id">T1</span><span class="pill plan">Not used</span></div>
+        <h3>Transductive smoothing</h3>
+        <ul><li>each test embedding pulled toward its 20 nearest test files</li><li>uses unlabelled test audio</li></ul>
+        <p class="note">Shown on X2. Assumed not allowed; the X2 + MS transductive zip is kept in case</p>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd>4.77 <small class="b">−3.15</small></dd></div><div><dt>Real noise</dt><dd>4.51 <small class="b">−1.94</small></dd></div></dl>
+      </article>
+    </div>
+  </section>
+
+  <section class="lane">
+    <div class="lane-head"><h2>Analysis &amp; tooling</h2><span>what the decisions rest on</span></div>
+    <div class="cards">
+      <article class="exp" data-s="keep">
+        <div class="row"><span class="id">SV</span><span class="pill keep">Approved</span></div>
+        <h3>Silver test set</h3>
+        <ul><li>public + loop-free real background on every clip</li><li>+ synthetic rumble on 30% of clips</li><li>on HF <code>pieceofcakee/vlsp2026</code>, with an agent entry point</li></ul>
+        <p class="note">Cleaned list: E2b 4.99, X2 4.83, R1 4.86, S3 4.82</p>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd class="na">n/a</dd></div><div><dt>Real noise</dt><dd class="na">n/a</dd></div></dl>
+      </article>
+      <article class="exp" data-s="keep">
+        <div class="row"><span class="id">FA</span><span class="pill keep">Done</span></div>
+        <h3>Failure analysis (silver)</h3>
+        <ul><li>shorter clip &lt; 1 s speech: 15% of trials, 31% of errors, EER 13.6</li><li>noise level and rumble barely matter</li><li>22% of errors are mislabelled trials</li></ul>
+        <p class="note">Perfect per-length calibration would gain only 0.08</p>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd class="na">n/a</dd></div><div><dt>Real noise</dt><dd class="na">n/a</dd></div></dl>
+      </article>
+      <article class="exp" data-s="keep">
+        <div class="row"><span class="id">Q1</span><span class="pill keep">In use</span></div>
+        <h3>Quick check, 8,000 trials</h3>
+        <ul><li>fixed held-out sample of the synthetic set</li><li>reject if ≥ +0.3 vs E2b; never used to select</li><li>runs on step checkpoints during training</li></ul>
+        <dl class="metrics"><div><dt>Synthetic</dt><dd class="na">n/a</dd></div><div><dt>Real noise</dt><dd class="na">n/a</dd></div></dl>
+      </article>
+    </div>
+  </section>
+
+  <section class="lane">
+    <div class="lane-head"><h2>Decision</h2><span>one private submission left, you submit</span></div>
+    <div class="decision">
+      <div><h3>Selection rule</h3><p>A change is kept only if it beats the current best on every noisy set (synthetic, real noise, silver), including the private-like re-weighting of impostor pairs. Scoring fixes apply only inside the segment where errors concentrate.</p></div>
+      <div><h3>Ready now</h3><p class="big">result-private-S3-seg-ms025-t0.zip</p><p>S3 soup + multi-speaker scoring + segment-gated trimming. Fallback: <code>result-private-S3-ms025-t0.zip</code>. Transductive, if allowed: <code>result-private-X2-ms025-t1.zip</code>.</p></div>
+      <div><h3>Why not EER 5</h3><p>Of our errors on real noise: 23% mislabelled trials, 39% also missed by the 12.5M teacher, 38% capacity (fixing all = teacher level 5.25). Only transductive scoring has moved EER that far: a rules question for the organizers.</p></div>
+    </div>
+  </section>
+
+  <footer>Clean public is no longer evaluated (your call, 19/10). Full numbers and negative results: <code>EXPERIMENTS.md</code>.</footer>
+</div>

@@ -1,0 +1,90 @@
+flowchart LR
+    %% VLSP 2026 SRED - experiment roadmap at 2026-10-19 08:30 ICT
+    %% EER % = public (original) / synthetic noise / real noise; QMF dur back-end
+    legend["KEY<br/>green = done, keep · red = done, rejected<br/>purple = running · orange = planned / your call<br/>EER = public / synth-noise / real-noise"]
+
+    subgraph S0["0 · SETUP (new server, 10-18)"]
+        setup["HF repo 26 GB, sha256 OK<br/>code = GitHub b8eecda<br/>venv torch 2.5.1+cu124"]
+        verify["K21 reproduced<br/>4.51 / 8.30 · zip corr 1.000"]
+        standin["noisy stand-ins rebuilt<br/>synth 17,850 · real 17,850"]
+        setup --> verify --> standin
+    end
+
+    subgraph S1["1 · BASELINES"]
+        k21["K21 (submitted)<br/>4.50 / 8.31 / 6.63<br/>private LB 8.32"]
+        e2b["E2b SphereFace2 · BEST<br/>4.48 / 7.92 / 6.45"]
+        k21 --> e2b
+    end
+
+    subgraph S2["2 · NOISE AUGMENTATION"]
+        n10["N10 heavy noise<br/>4.52 / 7.78 / 6.61<br/>loses real-noise"]
+        m1["M1 matched 50%<br/>4.54 / 7.94 / 6.39"]
+        m2["M2 matched 80%<br/>4.59 / 8.25 / 6.54"]
+        m3["M3 80% +5 dB harder<br/>4.59 / 8.32 / 6.52"]
+        m4["M4 curriculum 30→90%<br/>step 800 / 18k · ETA ~12:30<br/>early review @4k/8k/12k"]
+        n10 --> m1 --> m2 --> m3 --> m4
+    end
+
+    subgraph S3["3 · DENOISER FRONT-END (your idea)"]
+        d01["D01 denoiser aux ×1<br/>4.59 / 8.63 / 6.65<br/>pulled back to identity"]
+        d03["D03 denoiser aux ×5<br/>4.82 / 8.85 / 7.14"]
+        d02["D02 64ch + expansion<br/>OOM on 20 GB"]
+        d02b["D02b 48ch + expansion 6.58M<br/>4.75 / 8.91 / eval…"]
+        d00["D00 control, no denoiser<br/>eval running"]
+        d00c["D00c control pre-crash<br/>queued"]
+        dfz["D04 frozen E2b + denoiser<br/>task-driven (VoiceID-style)<br/>waiting for your go"]
+        d01 --> d03 --> d02 --> d02b
+        d00 --> d00c
+        d02b -.-> dfz
+    end
+
+    subgraph S4["4 · INFERENCE & TOOLING"]
+        trans["transductive re-tune<br/>keep k20 w0.5 tau0.6<br/>E2b synth 7.92 → 4.80"]
+        pairs["pair analysis D01 vs E2b<br/>fixes 502 / breaks 856"]
+        qs["quick screen 8,000 trials<br/>reject if Δ ≥ +0.3"]
+        wb["W&B dashboard<br/>setting up now"]
+        trans --> pairs --> qs --> wb
+    end
+
+    subgraph S5["5 · DECISION (by 21/10 23:59)"]
+        sel["selection rule: beat E2b on<br/>both noisy sets, ≤ +0.1 public"]
+        zips["E2b private zips READY<br/>t0 ≈ 7.9 · t1 ≈ 4.8 expected"]
+        submit["you submit once<br/>t1 only if rules allow"]
+        sel --> zips --> submit
+    end
+
+    standin --> k21
+    e2b --> n10
+    e2b --> d01
+    e2b --> d00
+    e2b --> trans
+    m4 --> sel
+    d00c --> sel
+    d02b --> sel
+    dfz -.-> sel
+
+    style legend fill:#ffffff,stroke:#9e9e9e
+    style setup fill:#c8e6c9,stroke:#4CAF50
+    style verify fill:#c8e6c9,stroke:#4CAF50
+    style standin fill:#c8e6c9,stroke:#4CAF50
+    style k21 fill:#c8e6c9,stroke:#4CAF50
+    style e2b fill:#c8e6c9,stroke:#4CAF50,stroke-width:3px
+    style n10 fill:#ffcdd2,stroke:#F44336
+    style m1 fill:#ffcdd2,stroke:#F44336
+    style m2 fill:#ffcdd2,stroke:#F44336
+    style m3 fill:#ffcdd2,stroke:#F44336
+    style m4 fill:#f3e5f5,stroke:#9C27B0,stroke-width:3px
+    style d01 fill:#ffcdd2,stroke:#F44336
+    style d03 fill:#ffcdd2,stroke:#F44336
+    style d02 fill:#ffcdd2,stroke:#F44336
+    style d02b fill:#f3e5f5,stroke:#9C27B0,stroke-width:3px
+    style d00 fill:#f3e5f5,stroke:#9C27B0,stroke-width:3px
+    style d00c fill:#fff3e0,stroke:#FF9800
+    style dfz fill:#fff3e0,stroke:#FF9800,stroke-dasharray:5 5
+    style trans fill:#c8e6c9,stroke:#4CAF50
+    style pairs fill:#c8e6c9,stroke:#4CAF50
+    style qs fill:#c8e6c9,stroke:#4CAF50
+    style wb fill:#f3e5f5,stroke:#9C27B0,stroke-width:3px
+    style sel fill:#fff3e0,stroke:#FF9800
+    style zips fill:#c8e6c9,stroke:#4CAF50
+    style submit fill:#fff3e0,stroke:#FF9800

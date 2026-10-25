@@ -1,8 +1,10 @@
 """Compare systems on the cleaned public split (P-dev decisions, P-hold check) vs a reference.
 
     python scripts/compare.py REF_CKPT CKPT [CKPT ...]
+    CMP_SPLIT=public_noisy python scripts/compare.py ...   # same trials on a noisy stand-in (embeddings from sred.evaluate --split)
 """
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -12,6 +14,10 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from error_analysis import qmf_scores  # noqa: E402
+from sred.calibrate import QMF  # noqa: E402
+from sred.data import cohort_subset, read_train_list  # noqa: E402
+from sred.embed import cache_key  # noqa: E402
+from sred.scoring import l2n  # noqa: E402
 from sred.data import read_trials, unique_files  # noqa: E402
 from sred.metrics import compute_eer, compute_min_dcf  # noqa: E402
 from sred.protocol import _half  # noqa: E402
@@ -37,7 +43,20 @@ rng = np.random.default_rng(0)
 W = [np.array([(u in p) and (v in p) for u, v in zip(sa[dev], sb[dev])])
      for p in [set(rng.choice(spks, len(spks), replace=True)) for _ in range(300)]]
 ckpts = sys.argv[1:]
-S = {c: qmf_scores(c, files, ia, ib, dur) for c in ckpts}
+SPLIT = os.environ.get("CMP_SPLIT", "public")
+
+
+def split_scores(model):  # qmf_scores for a stand-in split: same trials and durations, embeddings of the noisy audio
+    ci = cohort_subset(read_train_list(), per_spk=5)
+    emb = l2n(np.load(cache_key(model, SPLIT, files, mode="full")))
+    coh = l2n(np.load(cache_key(model, "traincohort5", [r for _, r in ci], mode="full")))
+    lengths = json.loads((ROOT / "lists/train_lengths.json").read_text())
+    cdur = np.array([lengths[r] / 16000 for _, r in ci])
+    return QMF(use_asnorm=False).fit(coh, [s for s, _ in ci], cdur).score(emb, dur, ia, ib)
+
+
+S = {c: qmf_scores(c, files, ia, ib, dur) if SPLIT == "public" else split_scores(c) for c in ckpts}
+print(f"split: {SPLIT}")
 b, yd = S[ckpts[0]][dev], y[dev]
 rows = []
 for c, s in S.items():

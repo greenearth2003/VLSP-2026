@@ -107,6 +107,10 @@ def main():
         jobs += [("private", str(DATA_ROOT / "private_test/data"), f) for f in unique_files(read_trials(pt)[0])]
     if "public" in a.splits:
         jobs += [("public", str(PUBLIC_DIR), f) for f in unique_files(read_trials()[0])]
+    for s in a.splits:  # noisy public stand-ins (same files and trials, other audio): data/<split>/
+        if s not in ("train", "private", "public"):
+            root = Path(__file__).resolve().parents[1] / "data" / s
+            jobs += [(s, str(root), f) for f in unique_files(read_trials()[0])]
     if a.limit:
         jobs = [j for s in ("train", "public") for j in [j for j in jobs if j[0] == s][: a.limit]]
     print(f"{len(jobs)} files", flush=True)

@@ -338,3 +338,151 @@ Model K21 (`exp/ft/W_K21_M/avg.pt`), cosine + QMF(dur). Run: `exp/logs/run_priva
 | `result-private-trans.zip` | `TRANSDUCTIVE=1` (k 20, w 0.5, tau 0.6, 2 passes, min_cluster 3) | public equivalent: 3.79 EER. Private redundancy 91.2 % of files with ≥ 3 neighbours (public 94.2 %; stress sets ≤ 3 %) → expected to help; 95.0 % of files smoothed. Use only if the rules allow unlabelled test audio. |
 
 Both: 278,410 lines in trial order, `file1 file2 score`, format checks passed.
+
+# New server (2026-10-18/19, RTX A4500 20 GB, `/mnt/tsharp/thucth/dataset/vlsp2026-sred`) — noise robustness, denoiser, multi-speaker scoring
+
+Setup reproduced the handoff: K21 public 4.507 / noisy stand-in 8.30; K21 private zips correlate 1.000 with the uploaded ones.
+Evaluation from here on: the two noisy stand-ins only (clean public dropped 19/10). Candidates vs E2b, QMF dur, EER %:
+
+| system | public | synthetic noise | real noise | verdict |
+|---|---|---|---|---|
+| **E2b SphereFace2** (`exp/ft/W_E2b_sf2/avg.pt`) | 4.48 | **7.92** | 6.45 | reference, final model |
+| M1 matched 50 % · M2 80 % · M3 80 % −13 dB | 4.54 · 4.59 · 4.59 | 7.94 · 8.25 · 8.32 | 6.39 · 6.54 · 6.52 | rejected |
+| M4 matched curriculum 30→90 % (WiSE of step 12k) | — | 7.98 (P better 0.55) | **6.38** (P 0.95) | tie on the private proxy → rejected |
+| D00 control: E2b + 6k steps on the D data, no denoiser | 4.57 | 8.17 | 6.73 | fine-tuning alone costs +0.1 / +0.25 (D00c, pre-crash ckpts: 4.58 / 8.17 / 6.67) |
+| D01 learned denoiser front-end (`sred/denoise.py`, +0.13M), aux ×1 | 4.59 | 8.63 | 6.65 | denoiser drifts to identity in joint training; vs D00: +0.46 on synthetic noise |
+| D03 denoiser, aux ×5 | 4.82 | 8.85 | 7.14 | stays a denoiser, loses speaker information |
+| D02b D03 + zero-gated pretrained block copies (`sred/expand.py`, 6.58M) | 4.75 | 8.91 | 7.09 | extra capacity does not help; D02 (64 ch) OOM |
+
+Negative results, do not repeat: noise augmentation beyond E2b (8 variants within ±0.15 of E2b on the proxy; heavier/matched noise
+trades synthetic-noise gains for real-noise losses); a denoising front-end in any weighting; depth expansion from pretrained copies.
+Training crops of the M-series often carry matched AND generic noise at once (`scripts/sample_train_aug.py`): noisier than private.
+
+**Multi-speaker pair scoring (19/10, kept):** private has ~2.6× the two-voice clips of noisy public (window-embedding 2-means,
+`scripts/multi_speaker_score.py`; 5.0 % of private files, 4.6 % of trials). Score = QMF_dur(cos_full [+ smoothing] +
+λ·max(0, best speaker-pair cosine − cos_full)), speakers = whole clip + the two cluster centroids of a two-voice clip. Never worse on the
+three stand-ins, large gain when two-voice clips are common (third stand-in `scripts/make_multi_public.py`, a second speaker's turn
+spliced into 35 % of noisy public files):
+
+| QMF dur EER | noisy public | + transductive | real noise | + transductive | spliced 2nd speaker | + transductive |
+|---|---|---|---|---|---|---|
+| E2b | 7.92 | 4.80 | 6.45 | 5.23 | 11.50 | 12.93 |
+| λ 0.25 | 7.91 (P 0.79) | **4.75** (P 0.92) | 6.43 | 5.18 | 10.77 | 11.73 |
+| λ 0.5 | 7.94 | 4.78 | 6.41 | 5.17 | **10.46** | **10.57** |
+
+Transductive smoothing itself hurts when two-voice clips are common (they pull in wrong neighbours); the blend repairs most of it.
+Zips: `scripts/make_multi_submission.py` → `submissions/final_private/result-private-E2b-ms{025,05}-t{0,1}.zip` (λ 0 reproduces the
+E2b zips exactly). Expected private effect: small (the blend touches 3.3 % of private trials).
+
+Tooling: `scripts/quick_screen.py` (8,000 fixed P-hold trials of the noisy proxy, cosine; reject at ≥ +0.3 vs E2b, never select;
+100–500 "hardest pairs" do not rank models), `scripts/early_review.sh` (screens step checkpoints during training),
+`scripts/compare.py` with `CMP_SPLIT=<stand-in>`, `scripts/pair_compare.py` (fixed/broken trials by SNR and speech duration),
+`scripts/wandb_sync.py` (project vlsp2026-sred). Transductive re-tune on the noisy stand-ins kept k 20 / w 0.5 / tau 0.6
+(`exp/analysis/transductive_grid_noisy_E2b.csv`). Folder ids leak identity on train/public (98.5 % of public targets share a folder)
+but not on private (0.06 %; same-folder cosine 0.12 = cross-folder) — nothing in the pipeline uses them.
+
+**Both inference modes kept in parallel (19/10):** the rules on unlabelled test audio are unknown, so every candidate is judged and
+zipped in both modes. Transductive (k 20 / w 0.5 / tau 0.6) on the stand-ins, QMF dur EER (P better than E2b on P-dev):
+E2b 4.80 / 5.23 · **M4 4.76 (0.78) / 4.96 (0.97)** · M1 4.73 (0.70) / 5.00 (0.91) · N10 4.78 (0.54) / 5.64 (0.64).
+Non-transductive the order is E2b 7.92 / 6.45 vs M4 7.98 / 6.38. Rule-based pick: E2b in both modes (M4 fails P > 0.95 on the proxy);
+M4 is the defensible alternative for the transductive zip. Zips for both: `result-private-{W_E2b_sf2,W_M4_curr}-t{0,1}.zip` and the
+multi-speaker-blended `result-private-{E2b,M4}-ms025-t{0,1}.zip` (+ `E2b-ms05`).
+
+**Simple post-hoc variants (19/10 evening), all rejected:** WiSE weight on E2b's step 12k: 0.8 → 7.94 / 6.52, 1.0 → 8.04 / 6.77
+(E2b 0.5: 7.92 / 6.45) — the quick screen read −0.40 for both (cosine, no QMF): a false positive, so the screen stays reject-only.
+Weight soups E2b+M4 and E2b+M4+M1: screen ±0.00. QMF with SNR / speech duration: 7.81–7.92 full but worse on P-dev and on real noise.
+Assumption from 19/10: transductive NOT allowed → submission candidate `result-private-E2b-ms025-t0.zip`.
+
+# Private-vs-public gap and approaches from it (2026-10-19/20 night)
+
+**The gap, measured** (`exp/analysis/private_gap_{features,scores,trials}.txt`):
+- Files: private matches noisy stand-ins on SNR (16.9 dB) but NOT on noise colour: synthetic noise adds far more high-frequency
+  energy (hf ratio −15.5 vs −28.3 dB, KS 0.63); real-noise stand-in matches private's spectrum (rolloff KS 0.07).
+- Scores: E2b's private score distribution has its non-target mode ~3.5 points higher than any stand-in's (lower half median
+  −1.85 vs non-target 25th pct −5.4); a target/non-target mixture of stand-in components misfits it (L1 0.39–0.50).
+- Trials: private pairs share channel and gender like same-speaker pairs (noise-floor gap 5.6 dB ≈ public targets 5.6, public
+  non-targets 12.1; same-gender 0.76 vs 0.66) → private's non-targets are hard, channel-matched impostors.
+- Re-weighting public non-targets to private's channel/gender mix (`scripts/private_like_eer.py`): every model +0.4–0.8 EER;
+  K21 9.03 vs its private 8.32 → the synthetic stand-in matched K21 by two errors cancelling (too-harsh noise, too-easy impostors).
+
+**Approaches tested against it** (E2b reference 7.92 synth / 6.45 real; private-like 8.66 / 6.86):
+| approach | result | verdict |
+|---|---|---|
+| X1 more layers (zero-gated pretrained copies, 6.45M, E2b recipe) | quick check +0.32 at the WiSE step; train acc 0.94 | rejected (overfits) |
+| A1 AdaFace-style norm-adaptive SphereFace2 margin | +0.10 / +0.45 at 4k/8k | rejected, stopped |
+| QMF on noisy cohort | ±0.00 | rejected |
+| WCCN / LDA-150/120/90 (train cohort clean + noisy) | +0.8 … +2.4 | rejected |
+| NAP from synthetic / real / both noise (`scripts/channel_comp.py`) | best −0.51 private-like synth but +1.1 real; from real or both: no gain | rejected: no shared noise subspace |
+| CakeVoiceID ECAPA-TDNN (external, 20.8M, not approved) | 12.75 / 18.37 / 14.82 (public / synth / real) | for information; not used, not for pseudo-labels |
+| **X2 same-channel hard negatives** (`--aug-shared 0.5`: a pair of different-speaker crops gets the identical real background, `lists/realnoise_bank.npz`) | synth 8.00 (P-dev −0.09, P 0.80), **real 6.05 (P 1.00)**, private-like 8.68 / **6.34**; transductive 4.77 / **4.51** | best on real noise by far, tie on synth |
+
+X2 fails the strict rule (P > 0.95 on both) only through the synthetic stand-in, the one whose noise spectrum does not match
+private; on the spectrally matched real-noise stand-in it wins in both modes. Recommended over E2b. Zips:
+`result-private-W_X2_shared-t{0,1}.zip`, `result-private-X2-ms025-t{0,1}.zip`. Pattern across X1/A1/X2: changes that raise
+train accuracy above E2b's ~0.90 lose on noise; X2 trains harder (0.91) and generalises better.
+| X3 = X2 + online relational KD from B6 on the SAME noisy crops (`--teacher exp/ft/W_G05_B6/avg.pt --rkd 20 --teacher-clean 0`) | quick check +0.16 / +0.38 at 4k/8k (X2: +0.26 / −0.24) | rejected, stopped at 8.5k |
+
+B6 teacher on the stand-ins (12.5M, not submittable): 6.10 synth / 5.25 real vs soup 7.94 / 6.08 — the student closes the
+teacher gap on clean audio (0.3) but not on noise (1.8 / 0.8); matching the teacher's noisy-crop similarities (X3) does not
+transfer it. B6 vs student confident disagreements: 1 trial on noisy public, 34 on private — too correlated to flag errors.
+Uncertain private band (5% nearest the threshold): mildly enriched for two-voice (x1.24), quiet (x1.3), <1 s speech (x1.16);
+noisiest pairs are NOT over-represented (x0.94); no problem-file cluster (`scripts/uncertain_private.py`).
+
+# Silver set, failure analysis and segment-gated scoring (2026-10-20/21 night)
+
+**R1 robust-v1** (X2 recipe + rumble v1 p 0.3 + energy speech crops 0.75–1.5 s p 0.3): synth 8.00, real 6.00, rumble v1 6.10,
+rumble_v2 6.30, realnoise_v2 6.29 → X2 level, not better than the soup; short clips not improved (< 1 s speech 13.70 vs 13.60).
+
+**Silver set** (approved 20/10; HF `pieceofcakee/vlsp2026`, folder `silver/`, entry point `AGENTS.md` + `evaluate_silver.py`):
+public + loop-free real train background (SNR median 12.5 dB) + rumble v2 on 30% of files. Cleaned list / all trials
+(`exp/scores/silver/`): E2b 4.99 / 6.51 · X2 4.83 / 6.19 · R1 4.86 / 6.30 · soup S3 4.82 / 6.26.
+
+**Where the soup fails on silver** (`scripts/failure_analysis_silver.py`, `scripts/silver_groups.py`; label-free segments):
+| segment | silver trials | share of errors | segment EER | private trials |
+|---|---|---|---|---|
+| shorter clip has < 1 s speech | 15.2% | 30.8% | 13.6 | 19.4% |
+| shorter clip < 2 s | 18.0% | 33.9% | 12.7 | 19.1% |
+| length ratio ≥ 4x | 17.7% | 25.1% | 9.4 | 14.2% |
+| level gap > 10 dB | 16.3% | 21.0% | 9.2 | 13.3% |
+| noise-floor gap > 10 dB | 44.5% | 51.3% | 8.5 | 31.0% |
+| longer clip > 8 s | 43.8% | 37.5% | 5.5 (easier than average) | 52.7% |
+- Mislabelled / no-speech trials (outside the cleaned list) hold 22% of errors.
+- Length mismatch costs nothing by itself: with ≥ 2 s of speech in the shorter clip, ratio ≥ 4x 4.02 = ratio < 2x 4.02.
+- Noise level and rumble barely matter (≤ 5 dB SNR: +41 excess errors; rumble: none).
+- Oracle per-length-bin calibration (uses labels) would gain only 0.08 → short trials overlap, not mis-calibrated.
+- No model fixes short speech: < 1 s EER E2b 13.99, X2 13.75, R1 13.70, soup 13.60.
+
+**TTA re-tested on silver (soup).** Best-match windows (`scripts/window_score.py`) at 2 s: 6.50 vs 6.27. Caveat: its window
+filter (≥ 50% energy-speech frames) keeps a median of ONE window per noisy clip, so the 19/10 1-s test and this one were
+handicapped. Fair version of "split long clips into 2 s chunks, take the max vs the other clip" (all chunks, hop 1 s, clips
+> 8 s only, `scripts/chunk_embed.py`): segment 5.54 → 6.15, pooled +0.27; top-3 / mean also worse; fused +0.04 … +0.09 → rejected.
+
+**Segment-gated scoring** (`scripts/segment_fix.py`): a fix replaces the baseline only inside one label-free segment; each
+branch has its own duration QMF fitted on train-cohort trials embedded the same way (log-odds on one scale, no test labels).
+Fixes tried: energy-trimmed embedding (`--mode vad`), whole+trimmed average, short clips tiled to 3 s (`scripts/short_tta_embed.py`),
+chunk scores. Pooled EER, all trials / cleaned list:
+| policy | silver | synthetic | real noise |
+|---|---|---|---|
+| baseline (whole clip, QMF) | 6.261 / 4.819 | 7.939 / 6.684 | 6.085 / 4.634 |
+| trimmed in noisy/level/short segments + tiled trimmed short clips (best on silver) | 6.097 / 4.707 | 7.811 / 6.551 | 6.141 / 4.638 → rejected |
+| whole+trimmed average everywhere | 6.157 / 4.728 | 7.787 / 6.543 | 6.061 / 4.584 |
+| **whole+trimmed average only where a clip is < 50% speech, or < 1 s speech, or level gap > 10 dB** | **6.161 / 4.711** | **7.791 / 6.538** | **6.053 / 4.584** |
+The gate covers 75–83% of stand-in trials (private 69.9%); speech-dense pairs (EER ≈ 5) keep their scores exactly.
+Private-like re-weighting: 6.60 → 6.53, 8.60 → 8.50, 6.44 → 6.39. Trial bootstrap P(better) 1.00 / 1.00 / 0.86.
+Builder: `scripts/make_segment_submission.py` (self-test on a stand-in, or `--split private --zip ...`).
+With the multi-speaker blend (λ 0.25) on both branches, silver: current S3-ms025 method 6.227 / 4.794 → gated 6.157 / 4.731.
+Private zips (checked: 278,410 lines, order, finite): `result-private-S3-seg-ms025-t0.zip` (recommended, non-transductive) and
+`result-private-S3-seg-t0.zip` (λ 0). Untouched private trials (30.1%) are bit-identical to `result-private-S3-ms025-t0.zip`;
+gated ones correlate 0.9995; 0.3–0.5% of accept/reject decisions change.
+
+**X4 rejected (21/10 morning):** X2 + similar-voice pairs (`--hard-pairs 0.5`, 10 teacher-centroid neighbours per speaker) + the
+same mic colouration on shared-background pairs (`--shared-eq 1.0`), aimed at private's channel- and voice-matched impostors.
+Quick check +0.53 / +0.45 vs E2b at 4k / 8k steps (X2 at the same steps: +0.26 / −0.24); trains harder (acc 0.844 vs 0.865 at
+1k). Stopped at 8.6k (`exp/logs/launch_X4.sh`).
+
+**Error budget (21/10, `exp/analysis`):** current best (S3 + segment-gated) vs the B6 teacher (12.5M) at each one's EER point.
+Real noise: ours 6.05 (cleaned 4.58), B6 5.25 (3.71); our errors = 23% mislabelled / no-speech, 39% B6 also wrong, 38% only
+we are wrong (36% of those with < 1 s speech). Synthetic: ours 7.79 / B6 6.10; 18% / 39% / 43%. Even closing the whole capacity
+gap only reaches the teacher's 5.25; private ran +1.7 above real noise for K21 (6.63 → 8.32). Score fusion of two of our M
+variants gains 0.03 over the soup (score correlation 0.995); M + S = 7.96M is over the limit. The only measured lever of
+the size needed for ~5 on private is transductive scoring (X2: synthetic 8.00 → 4.77, real 6.05 → 4.51) — a rules question.

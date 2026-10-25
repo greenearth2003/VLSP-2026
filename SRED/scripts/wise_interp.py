@@ -23,12 +23,14 @@ def main():
     args = ap.parse_args()
 
     ft = torch.load(args.ft_ckpt, map_location="cpu", weights_only=False)
-    base = load_model(ft["base_model"]).state_dict()
+    from sred.expand import base_state  # expanded checkpoints (sred/expand.py) need the base in the same layout
+    base = base_state(ft["base_model"], ft.get("expand")) if ft.get("expand") else load_model(ft["base_model"]).state_dict()
     a = args.alpha
     sd = {k: (a * v.double() + (1 - a) * base[k].double()).to(v.dtype) if v.is_floating_point() else v
           for k, v in ft["model"].items()}
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-    torch.save({"base_model": ft["base_model"], "model": sd, "step": f"wise{a}({Path(args.ft_ckpt)})"}, args.out)
+    torch.save({"base_model": ft["base_model"], "model": sd, "step": f"wise{a}({Path(args.ft_ckpt)})",
+                "expand": ft.get("expand"), "denoiser": ft.get("denoiser")}, args.out)
     print("wrote", args.out)
 
 

@@ -16,6 +16,7 @@
 #   <zip_name> containing a single results.txt at the root; lines "file1 file2 score", space separated,
 #   no header, same order as the trial list.
 set -euo pipefail
+export LC_ALL=C   # awk number parsing: a locale with decimal comma (e.g. vi_VN) fails every score check
 cd "$(dirname "$0")/.." && source env.sh
 
 MODEL=${FINAL_MODEL:-exp/ft/W_K21_M/avg.pt}
