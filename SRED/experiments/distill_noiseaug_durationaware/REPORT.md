@@ -5,7 +5,7 @@ date: 2026-10-25
 branch: thucth-distill-noiseaug-durationaware
 code: SRED/experiments/distill_noiseaug_durationaware/
 hf_repo: pieceofcakee/vlsp2026 (private dataset; artifacts, weights, results under the same path)
-submission: team submission 2 = E8-b6-lowrank-kd-continue step 5000 + final recipe (the only submission from this line)
+submission: result-private-E8s5000_wise0.7 (team submission 2) = E8-b6-lowrank-kd-continue step 5000 + final recipe (the only submission from this line)
 params: 6947208
 silver_eer_all_cleaned_privlike: [5.109, 3.764, 5.656]
 silver_minDCF: 0.375
@@ -15,7 +15,7 @@ silver_minDCF: 0.375
 
 ## 1. Summary
 
-**Submitted (team submission 2):** `E8-b6-lowrank-kd-continue` step 5000 (6.95M params) + final recipe. Silver EER (all / cleaned /
+**Submitted: `result-private-E8s5000_wise0.7` (team submission 2):** `E8-b6-lowrank-kd-continue` step 5000 (6.95M params) + final recipe. Silver EER (all / cleaned /
 private-like) **5.109 / 3.764 / 5.656**, minDCF 0.375 (independent re-run on the second server: 5.105 / 3.755 / 5.624).
 Earlier team best: 5.413 / 3.933 / 5.709. Teacher E4 (12.46M, not submittable): 4.645 / 3.079 / 4.868 with the recipe.
 
@@ -105,7 +105,7 @@ Cosine EER saturates by 4k steps. The fresh restart leaves cosine unchanged but 
 
 ## 6. Submission (private: 278,410 trials, 37,354 files)
 
-Team submission 2 = E8 s5000 + final recipe (silver 5.11 / 3.76 / 5.66); the only submission from this line.
+`result-private-E8s5000_wise0.7` (team submission 2) = E8 s5000 + final recipe (silver 5.11 / 3.76 / 5.66); the only submission from this line.
 The zip holds one `results.txt` ("fileA fileB score", trial order); line count, pair order and finite scores checked.
 Scored on server B with a sharded scorer; an independent full re-run on server A agrees at Spearman 0.999997
 (mean |Δ| 0.014, score s.d. 8.8).
