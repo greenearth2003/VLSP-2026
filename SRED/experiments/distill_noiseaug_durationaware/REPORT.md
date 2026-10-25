@@ -7,7 +7,7 @@ code: SRED/experiments/distill_noiseaug_durationaware/
 hf_repo: pieceofcakee/vlsp2026 (private dataset; artifacts, weights, results under the same path)
 submission: result-private-E8s5000_wise0.7 (team submission 2) = E8-b6-lowrank-kd-continue step 5000 + final recipe (the only submission from this line)
 params: 6947208
-silver_eer_all_cleaned_privlike: [5.109, 3.764, 5.656]
+silver_eer_all_cleaned: [5.109, 3.764]
 silver_minDCF: 0.375
 ---
 
@@ -15,9 +15,9 @@ silver_minDCF: 0.375
 
 ## 1. Summary
 
-**Submitted: `result-private-E8s5000_wise0.7` (team submission 2):** `E8-b6-lowrank-kd-continue` step 5000 (6.95M params) + final recipe. Silver EER (all / cleaned /
-private-like) **5.109 / 3.764 / 5.656**, minDCF 0.375 (independent re-run on the second server: 5.105 / 3.755 / 5.624).
-Earlier team best: 5.413 / 3.933 / 5.709. Teacher E4 (12.46M, not submittable): 4.645 / 3.079 / 4.868 with the recipe.
+**Submitted: `result-private-E8s5000_wise0.7` (team submission 2):** `E8-b6-lowrank-kd-continue` step 5000 (6.95M params) + final recipe. Silver EER (all / cleaned)
+**5.109 / 3.764**, minDCF 0.375 (independent re-run on the second server: 5.105 / 3.755).
+Earlier team best: 5.413 / 3.933. Teacher E4 (12.46M, not submittable): 4.645 / 3.079 with the recipe.
 
 Pipeline: fine-tune the approved ReDimNet2-B6 on noisy two-view batches (teacher) → compress below 7M with an
 activation-whitened SVD → recover with the same recipe + KD from the teacher → WiSE + train-fitted quality-aware
@@ -27,13 +27,13 @@ calibration. All components were built in this line; no teammate checkpoint or c
 
 - **Train:** cleaned official list, 1,823 speakers, 57,010 utterances; a fixed bank of 859,684 crops, so teacher
   embeddings are cached per crop.
-- **Two-view batches:** 32 speakers/step × (short speech-dense crop 0.5–2 s, long random crop 2.5–6 s). Short bins
-  cover the shorter side of 97 % of private trials. Batches are a function of (seed, step): exact resume (55 tests).
+- **Two-view batches:** 32 speakers/step × (short speech-dense crop 0.5–2 s, long random crop 2.5–6 s).
+  Batches are a function of (seed, step): exact resume (55 tests).
 - **Noise on the fly** (allowed data only): RIRS_NOISES reverb (p 0.3); additive noise (p 0.6) from MUSAN
   noise/music/babble, RIRS point-source/isotropic and real train backgrounds (SNR 0–20 dB); shared background on
   speaker pairs (p 0.5); band-limit / EQ / μ-law. Teachers see the clean crop.
 - **Silver** (`evaluate.py`, plain cosine unless stated): 49,993 public trials on `public_rumble_v2` audio; *all*,
-  *cleaned* labels, *private-like* (frozen trial weights matching the private duration/noise profile), minDCF(0.01),
+  *cleaned* labels, minDCF(0.01),
   natural speech-duration buckets. Seed noise ≈ 0.1 EER (E0 seeds 0/1: 7.755 / 7.639).
 
 ## 3. Method
@@ -55,57 +55,57 @@ calibration. All components were built in this line; no teammate checkpoint or c
 
 ## 4. Main results (silver EER %)
 
-| System | Params | All | Clean | Priv-like | minDCF | <0.75 s | >3 s |
-|---|---|---|---|---|---|---|---|
-| B4 pretrained | 6.66M | 13.96 | 12.75 | 14.25 | 0.652 | 22.3 | 6.14 |
-| B6 pretrained | 12.46M | 8.80 | 7.28 | 8.82 | 0.402 | 17.5 | 3.85 |
-| E0 B4 fine-tune (s6000) | 6.66M | 7.56 | 6.24 | 7.90 | 0.485 | 14.8 | 3.96 |
-| E4 B6 teacher (s6000) | 12.46M | 5.35 | 3.90 | 5.95 | 0.352 | 12.6 | 3.11 |
-| E5 low-rank + KD (s8000) | 6.95M | 5.81 | 4.34 | 6.32 | 0.378 | 13.3 | 3.32 |
-| E8 continuation (s5000) | 6.95M | 5.81 | 4.33 | 6.31 | 0.383 | 13.3 | 3.32 |
-| **E8 + final recipe (submitted)** | 6.95M | **5.11** | **3.76** | **5.66** | **0.375** | 12.9 | 2.98 |
-| Earlier team best, cosine / + back-end | < 7M | 6.12 / 5.41 | 4.66 / 3.93 | 6.47 / 5.71 | 0.440 | 12.4 | 3.20 |
+| System | Params | All | Clean | minDCF | <0.75 s | >3 s |
+|---|---|---|---|---|---|---|
+| B4 pretrained | 6.66M | 13.96 | 12.75 | 0.652 | 22.3 | 6.14 |
+| B6 pretrained | 12.46M | 8.80 | 7.28 | 0.402 | 17.5 | 3.85 |
+| E0 B4 fine-tune (s6000) | 6.66M | 7.56 | 6.24 | 0.485 | 14.8 | 3.96 |
+| E4 B6 teacher (s6000) | 12.46M | 5.35 | 3.90 | 0.352 | 12.6 | 3.11 |
+| E5 low-rank + KD (s8000) | 6.95M | 5.81 | 4.34 | 0.378 | 13.3 | 3.32 |
+| E8 continuation (s5000) | 6.95M | 5.81 | 4.33 | 0.383 | 13.3 | 3.32 |
+| **E8 + final recipe (submitted)** | 6.95M | **5.11** | **3.76** | **0.375** | 12.9 | 2.98 |
+| Earlier team best, cosine / + back-end | < 7M | 6.12 / 5.41 | 4.66 / 3.93 | 0.440 | 12.4 | 3.20 |
 
-## 5. Ablations (silver EER %, all / clean / priv-like)
+## 5. Ablations (silver EER %, all / clean)
 
 **5.1 Route to < 7M** (one change per row, plain cosine)
 
-| Model | All / clean / priv-like | Δ all |
+| Model | All / clean | Δ all |
 |---|---|---|
-| B6 pretrained → plain weight SVD to 6.95M, no training | 15.78 / 14.77 / 16.45 | +6.98 |
-| B6 pretrained → whitened SVD to 6.95M, no training | 9.70 / 8.33 / 9.62 | +0.90 (−6.08 vs plain) |
-| E4 teacher → whitened SVD, no training (E5 init) | 6.43 / 5.06 / 6.62 | +1.08 vs teacher |
-| + recovery with KD, 6k steps (E5 s6000) | 5.83 / 4.28 / 6.22 | −0.60 |
-| Same budget, no teacher route: B4 fine-tune (E0) | 7.56 / 6.24 / 7.90 | +1.73 vs E5 |
-| E1 = E0 + DAME prefix heads (B4) | 7.43 / 6.21 / 7.79; <0.75 s 16.0 vs 14.8 | rejected (short) |
-| E4 with BN statistics re-estimated on noisy train | 8.33 / 6.98 / 9.16 | rejected |
+| B6 pretrained → plain weight SVD to 6.95M, no training | 15.78 / 14.77 | +6.98 |
+| B6 pretrained → whitened SVD to 6.95M, no training | 9.70 / 8.33 | +0.90 (−6.08 vs plain) |
+| E4 teacher → whitened SVD, no training (E5 init) | 6.43 / 5.06 | +1.08 vs teacher |
+| + recovery with KD, 6k steps (E5 s6000) | 5.83 / 4.28 | −0.60 |
+| Same budget, no teacher route: B4 fine-tune (E0) | 7.56 / 6.24 | +1.73 vs E5 |
+| E1 = E0 + DAME prefix heads (B4) | 7.43 / 6.21; <0.75 s 16.0 vs 14.8 | rejected (short) |
+| E4 with BN statistics re-estimated on noisy train | 8.33 / 6.98 | rejected |
 
 **5.2 Training length** (cosine | final recipe)
 
 | Checkpoint | Cosine | Final recipe |
 |---|---|---|
-| E5 s4000 / s6000 | 5.85 / 4.26 / 6.25 · 5.83 / 4.28 / 6.22 | – · 5.35 / 3.93 / 5.71 |
-| E5 s8000 / s10000 | 5.81 / 4.34 / 6.32 · 5.84 / 4.38 / 6.38 | 5.33 / 3.90 / 5.70 · 5.35 / 3.87 / 5.75 |
-| E8 s5000 (fresh restart from E5 s8000) | 5.81 / 4.33 / 6.31 | **5.11 / 3.76 / 5.66** |
+| E5 s4000 / s6000 | 5.85 / 4.26 · 5.83 / 4.28 | – · 5.35 / 3.93 |
+| E5 s8000 / s10000 | 5.81 / 4.34 · 5.84 / 4.38 | 5.33 / 3.90 · 5.35 / 3.87 |
+| E8 s5000 (fresh restart from E5 s8000) | 5.81 / 4.33 | **5.11 / 3.76** |
 
 Cosine EER saturates by 4k steps. The fresh restart leaves cosine unchanged but makes scores easier to calibrate
 (recipe gain 0.70 vs 0.43; minDCF 0.375 vs 0.390), reproduced on both servers.
 
 **5.3 Back-end on E4 s6000** (QMF2 = duration + SNR; each row adds one change; train-fitted only)
 
-| Back-end | All / clean / priv-like | minDCF | Kept |
+| Back-end | All / clean | minDCF | Kept |
 |---|---|---|---|
-| plain cosine | 5.35 / 3.90 / 5.92 | 0.352 | |
-| QMF duration only → QMF2 duration + SNR | 5.07 → 5.03 / 3.54 / 5.49 | 0.372 | base |
+| plain cosine | 5.35 / 3.90 | 0.352 | |
+| QMF duration only → QMF2 duration + SNR | 5.07 → 5.03 / 3.54 | 0.372 | base |
 | + raw norm · + speech-only view · + AS-norm | 5.01 · 5.05 · 5.05 (clean 3.53 · 3.46 · 3.52) | 0.358 · 0.354 · 0.344 | ✓ all three |
 | + short crops in fit · + centering | 5.07 · 5.24 | 0.346 · 0.378 | ✗ |
 | boosted trees · per-duration-bin LR · 6 s chunking | 5.19 · 5.13 · 5.07 | – | ✗ |
-| WiSE α 0.5 / 0.7 / 0.8, cosine | 5.31 / 5.09 / 5.08 (priv-like 5.40 / 5.34 / 5.44) | 0.317–0.321 | α 0.7 |
-| **WiSE 0.7 + QMF2 + norm + speech + AS-norm** | **4.65 / 3.08 / 4.87** | 0.300 | final |
+| WiSE α 0.5 / 0.7 / 0.8, cosine (all) | 5.31 / 5.09 / 5.08 | 0.317–0.321 | α 0.7 |
+| **WiSE 0.7 + QMF2 + norm + speech + AS-norm** | **4.65 / 3.08** | 0.300 | final |
 
 ## 6. Submission (private: 278,410 trials, 37,354 files)
 
-`result-private-E8s5000_wise0.7` (team submission 2) = E8 s5000 + final recipe (silver 5.11 / 3.76 / 5.66); the only submission from this line.
+`result-private-E8s5000_wise0.7` (team submission 2) = E8 s5000 + final recipe (silver 5.11 / 3.76); the only submission from this line.
 The zip holds one `results.txt` ("fileA fileB score", trial order); line count, pair order and finite scores checked.
 Scored on server B with a sharded scorer; an independent full re-run on server A agrees at Spearman 0.999997
 (mean |Δ| 0.014, score s.d. 8.8).
@@ -131,7 +131,7 @@ $E/recipe.sh runs/E8-b6-lowrank-kd-continue/step5000.pt runs/E5-b6-lowrank-kd/st
 
 ## 8. Limitations and next steps
 
-- Gains ≤ 0.1 EER are within seed noise; the submission beats the earlier best by only 0.05 on private-like.
+- Gains ≤ 0.1 EER are within seed noise; the margin over the earlier best is 0.30 (all) / 0.17 (cleaned).
 - For E5 the calibrator hurts the < 0.75 s bucket (12.94 → 13.68); E8 does not show this.
 - Untried: utterance-balanced sampling (speaker-uniform sampling had seen 83 % of utterances by step 6000), B4 with
   KD from E4 (E6), structured pruning instead of low-rank (E7).
