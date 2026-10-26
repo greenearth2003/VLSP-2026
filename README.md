@@ -7,7 +7,7 @@ Repo có nhiều nhánh. File này cho biết **nhánh nào tạo ra file nộp 
 | Nhánh | Hệ thống | Tham số inference | Valid (silver), all / cleaned | Public test, all / cleaned | File nộp private |
 |---|---|---|---|---|---|
 | [`minh-s5q3-final`](../../tree/minh-s5q3-final) | **S5 + Q3** | 6,917,480 | **5.245 % / 3.751 %** | **4.357 % / 2.622 %** | `sred_S5Q3_private_241026.zip` |
-| [`thucth-distill-noiseaug-durationaware`](../../tree/thucth-distill-noiseaug-durationaware) | **E8s5000_wise0.7** (VE v1.0.lite) + calibrator | ≈ 6.95M | **5.109 % / 3.764 %** | chưa đo | `result-private-E8s5000_wise0.7.zip` |
+| [`thucth-distill-noiseaug-durationaware`](../../tree/thucth-distill-noiseaug-durationaware) | **E8s5000_wise0.7** (VE v1.0.lite) + calibrator | 6,947,208 | **5.109 % / 3.764 %** | **4.401 % / 2.798 %** | `result-private-E8s5000_wise0.7.zip` |
 
 Các thước đo:
 - EER (%); số thấp hơn là tốt hơn.
@@ -63,7 +63,10 @@ Các thước đo:
   - WiSE trộn trọng số 0.7;
   - calibrator chất lượng (QMF2: norm + speech view + AS-norm), fit trên speaker của tập train.
 - **Kết quả valid (silver):** 5.109 / 3.764 (all / cleaned), theo `REPORT.md` của nhánh.
-- **Public test:** chưa đo trong repo này.
+- **Public test** (đo ngày 26/10/2026 bằng `ve_infer.py` của nhánh, commit `68a264b`, model tải từ HF, SHA256 khớp):
+  all **4.401 %**, minDCF 0.2805; cleaned **2.798 %**, minDCF 0.2366.
+  - So với S5 + Q3 (4.357 / 2.622), S5 thấp hơn 0.04 / 0.18 điểm, nhưng chưa có ý nghĩa thống kê (bootstrap P 0.55 / 0.70).
+  - Trên valid (silver) thì ngược lại: E8s5000 5.11 < S5 5.245.
 - **Tài liệu và code:** `SRED/experiments/distill_noiseaug_durationaware/` trong nhánh: `REPORT.md`, `README.md`,
   `HANDOFF.md`.
 - **Inference:** `ve_infer.py score --model-dir MODEL_DIR --trials ... --audio-dir ... --out results.txt`.
