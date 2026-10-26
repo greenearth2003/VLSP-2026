@@ -7,7 +7,7 @@ Repo có nhiều nhánh. File này cho biết **nhánh nào tạo ra file nộp 
 | Nhánh | Hệ thống | Tham số inference | Valid (silver), all / cleaned | Public test, all / cleaned | File nộp private |
 |---|---|---|---|---|---|
 | [`minh-s5q3-final`](../../tree/minh-s5q3-final) | **S5 + Q3** | 6,917,480 | **5.245 % / 3.751 %** | **4.357 % / 2.622 %** | `sred_S5Q3_private_241026.zip` |
-| [`thucth-distill-noiseaug-durationaware`](../../tree/thucth-distill-noiseaug-durationaware) | **E8s5000_wise0.7** (VE v1.0.lite) + calibrator | ≈ 6.95M | **5.11 % / 3.76 %** (5.109 / 3.764) | chưa đo | `result-private-E8s5000_wise0.7.zip` |
+| [`thucth-distill-noiseaug-durationaware`](../../tree/thucth-distill-noiseaug-durationaware) | **E8s5000_wise0.7** (VE v1.0.lite) + calibrator | ≈ 6.95M | **5.109 % / 3.764 % | chưa đo | `result-private-E8s5000_wise0.7.zip` |
 
 Các thước đo:
 - EER (%); số thấp hơn là tốt hơn.
