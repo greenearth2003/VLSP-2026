@@ -3,6 +3,18 @@
 Branch `minh-s5q3-final` chỉ chứa những thứ cần để **chạy inference và tái lập file kết quả private test** đã nộp:
 code inference, trọng số model S5, tham số back-end Q3 và hướng dẫn này. Không có code train, không có dữ liệu.
 
+> **Disclaimer:** **S5 + Q3** (nhánh này) là **model tốt nhất của
+> chúng tôi trên public test**. Trên public test gốc (49,993 trial) nó đạt **4.357 % EER** (all) và **2.622 %**
+> (cleaned), thấp nhất trong các hệ thống của đội:
+>
+> | Hệ thống | all | cleaned |
+> |---|---|---|
+> | S5 + Q3 | **4.357 %** | **2.622 %** |
+> | E8s5000_wise0.7 | 4.401 % | 2.798 % |
+> | C2 + Q3 | 4.409 % | 2.714 % |
+>
+> S5 + Q3 là hệ thống tạo ra file nộp `sred_S5Q3_private_241026.zip`.
+
 | Thành phần | Nội dung |
 |---|---|
 | Model | **S5**: ReDimNet2-B6 nén low-rank, **6,917,480 tham số** (< 7M), 1 mạng duy nhất, embedding 192 chiều |
