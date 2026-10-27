@@ -2,6 +2,18 @@
 
 Repo có nhiều nhánh. File này cho biết **nhánh nào tạo ra file nộp nào**, kết quả của mỗi hệ thống và cách chạy lại.
 
+> **Disclaimer:** **S5 + Q3** (nhánh [`minh-s5q3-final`](../../tree/minh-s5q3-final)) là **model tốt nhất của
+> chúng tôi trên public test**. Trên public test gốc (49,993 trial) nó đạt **4.357 % EER** (all) và **2.622 %**
+> (cleaned), thấp nhất trong các hệ thống của đội:
+>
+> | Hệ thống | all | cleaned |
+> |---|---|---|
+> | S5 + Q3 | **4.357 %** | **2.622 %** |
+> | E8s5000_wise0.7 | 4.401 % | 2.798 % |
+> | C2 + Q3 | 4.409 % | 2.714 % |
+>
+> S5 + Q3 là hệ thống tạo ra file nộp `sred_S5Q3_private_241026.zip`.
+
 ## 1. Tóm tắt
 
 | Nhánh | Hệ thống | Tham số inference | Valid (silver), all / cleaned | Public test, all / cleaned | File nộp private |
