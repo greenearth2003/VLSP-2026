@@ -18,7 +18,7 @@ Cake Digital Bank, Vietnam \\
 \begin{document}
 \maketitle
 \begin{abstract}
-We describe our system for the VLSP 2026 Speaker Recognition on Edge Devices (SRED) challenge. A fine-tuned ReDimNet2-B6 teacher is compressed into a single network that produces 192-dimensional speaker embeddings with 6,947,208 parameters. Compression uses activation-whitened low-rank factorization. The compressed student is then trained on paired short and long crops with pointwise and relational knowledge distillation, followed by weight interpolation. Checkpoints are compared by plain cosine EER on the clean official Public Test audio. We submit two systems, neither of which uses score normalization. System~A interpolates a restarted student with its starting checkpoint and applies a quality-aware logistic back-end, fitted on training speakers only, that combines the cosine score with speech duration, SNR, and embedding norm; it obtains 4.449\% EER and 0.271 minDCF on Public Test. System~B, the best checkpoint under plain cosine scoring, interpolates a recovery checkpoint with the compressed initialization and is scored by cosine similarity alone; it obtains 4.685\% EER and 0.267 minDCF. This report details its data preparation, compression, training objectives, optimization schedule, and inference procedure.
+We describe our system for the VLSP 2026 Speaker Recognition on Edge Devices (SRED) challenge. A fine-tuned ReDimNet2-B6 teacher is compressed into a single network that produces 192-dimensional speaker embeddings with 6,947,208 parameters. Compression uses activation-whitened low-rank factorization. The compressed student is then trained on paired short and long crops with pointwise and relational knowledge distillation, followed by weight interpolation. Checkpoints are compared by plain cosine EER on Public Test. We submit two systems, neither of which uses score normalization. System~A interpolates a restarted student with its starting checkpoint and applies a quality-aware logistic back-end, fitted on training speakers only, that combines the cosine score with speech duration, SNR, and embedding norm; it obtains 4.449\% EER and 0.271 minDCF on Public Test. System~B, the best checkpoint under plain cosine scoring, interpolates a recovery checkpoint with the compressed initialization and is scored by cosine similarity alone; it obtains 4.685\% EER and 0.267 minDCF. This report details their data preparation, compression, training objectives, optimization schedule, and inference procedure.
 \end{abstract}
 
 \section{Introduction}
@@ -37,16 +37,16 @@ The official Vi-SRED26 training list contains 58,404 utterances from 1,900 speak
 % TODO: describe how the cleaned list was produced (which IDs/utterances were removed and why).
 
 \subsection{Test trials}
-Public Test contains 49,993 trials over 17,850 files; Private Test contains 278,410 trials over 37,354 files. An auxiliary cleaned list of Public Test retains 47,932 trials after excluding 2,061 trials involving suspected label or speech-content problems. We report all-trial results as the primary measure and cleaned results as a diagnostic; the latter do not replace the official evaluation protocol.
+Public Test contains 49,993 trials over 17,850 files; Private Test contains 278,410 trials over 37,354 files.
 
-Public Test is also used for development: checkpoints are selected by plain cosine EER on its clean official audio (Section~\ref{sec:selection}). No other held-out or pseudo-labelled data is used for selection, and the scoring back-end is fitted on training speakers only. Public Test results therefore describe performance on the development set; Private Test remains the held-out evaluation.
+Public Test is also used for development: checkpoints are selected by plain cosine EER on all of its trials (Section~\ref{sec:selection}). No other held-out or pseudo-labelled data is used for selection, and the scoring back-end is fitted on training speakers only. Public Test results therefore describe performance on the development set; Private Test remains the held-out evaluation.
 
 \subsection{Evaluation metrics}
 For a similarity-score threshold $\tau$, a trial is accepted as same-speaker when its score is at least $\tau$. Let $P_{\mathrm{miss}}(\tau)$ be the fraction of target (same-speaker) trials rejected and $P_{\mathrm{fa}}(\tau)$ the fraction of non-target (different-speaker) trials accepted. EER is the average of these rates at the available threshold minimizing their absolute difference. We also report normalized minimum detection cost:
 \begin{equation}
  \min_\tau\frac{pP_{\mathrm{miss}}(\tau)+(1-p)P_{\mathrm{fa}}(\tau)}{\min(p,1-p)},\quad p=0.01,
 \end{equation}
-Here $p$ is the prior probability of a target trial; both error costs are one. The minimization searches over score thresholds, and $\min(p,1-p)$ normalizes by the lower cost of always accepting or always rejecting. We report EER as a percentage and minDCF at $p=0.01$, on all Public Test trials and on the cleaned subset.
+Here $p$ is the prior probability of a target trial; both error costs are one. The minimization searches over score thresholds, and $\min(p,1-p)$ normalizes by the lower cost of always accepting or always rejecting. We report EER as a percentage and minDCF at $p=0.01$, on all Public Test trials.
 
 \section{Embedding Extractor}
 \label{sec:model}
@@ -135,52 +135,50 @@ Calibration trials are built from five utterances per training speaker, using cl
 \begin{table}[t]
 \centering
 \small
-\begin{tabular}{@{}lrrrr@{}}
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{@{}lrr@{}}
 \toprule
-& \multicolumn{2}{c}{All trials} & \multicolumn{2}{c}{Cleaned} \\
-\cmidrule(lr){2-3}\cmidrule(lr){4-5}
-System & EER & minDCF & EER & minDCF \\
+System & EER & minDCF \\
 \midrule
-\nolinkurl{E8s5000_wise0.7}, plain cosine & 4.853 & 0.257 & 3.104 & 0.210 \\
-System A: \nolinkurl{E8s5000_wise0.7} + back-end & 4.449 & 0.271 & 2.852 & 0.225 \\
-System B: \nolinkurl{E5s6000_wise0.7}, plain cosine & 4.685 & 0.267 & 3.008 & 0.216 \\
+\begin{tabular}[t]{@{}l@{}}\nolinkurl{E8s5000_wise0.7},\\ plain cosine\end{tabular} & 4.853 & 0.257 \\\addlinespace
+\begin{tabular}[t]{@{}l@{}}System A: \nolinkurl{E8s5000_wise0.7}\\ + back-end\end{tabular} & 4.449 & 0.271 \\\addlinespace
+\begin{tabular}[t]{@{}l@{}}System B: \nolinkurl{E5s6000_wise0.7},\\ plain cosine\end{tabular} & 4.685 & 0.267 \\
 \bottomrule
 \end{tabular}
-\caption{Submitted systems on Public Test. EERs are percentages; minDCF uses target prior $p=0.01$. Cleaned denotes the auxiliary cleaned-trial subset (Section~\ref{sec:data}). The System~A back-end is fitted on training speakers only; neither system uses score normalization.}
+\caption{Submitted systems on Public Test. EERs are percentages; minDCF uses target prior $p=0.01$. The System~A back-end is fitted on training speakers only; neither system uses score normalization.}
 \label{tab:final}
 \end{table}
 
 \section{Results}
 \subsection{Checkpoint selection}
 \label{sec:selection}
-Table~\ref{tab:cosine} compares nine candidate extractors by plain cosine scoring of whole-clip embeddings on the clean official Public Test audio, without any back-end. Candidates are recovery checkpoints at steps 4,000--10,000, their interpolations with the compressed initialization ($0.7\theta_{\mathrm{recovery}}+0.3\theta_{\mathrm{init}}$), and the restart checkpoint with and without interpolation with its starting checkpoint. All candidates lie within 0.2 EER points of each other. By plain cosine, the interpolated recovery step-6,000 checkpoint is best (4.685\%) and is submitted as System~B. The restart checkpoints rank last under plain cosine, although they have competitive minDCF.
+Table~\ref{tab:cosine} compares nine candidate extractors by plain cosine scoring of whole-clip embeddings on Public Test, without any back-end. Candidates are recovery checkpoints at steps 4,000--10,000, their interpolations with the compressed initialization ($0.7\theta_{\mathrm{recovery}}+0.3\theta_{\mathrm{init}}$), and the restart checkpoint with and without interpolation with its starting checkpoint. All candidates lie within 0.2 EER points of each other. By plain cosine, the interpolated recovery step-6,000 checkpoint is best (4.685\%) and is submitted as System~B. The restart checkpoints rank last under plain cosine, although they have competitive minDCF.
 
 \begin{table}[t]
 \centering
 \small
-\begin{tabular}{lrrrr}
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{@{}lrr@{}}
 \toprule
-& \multicolumn{2}{c}{All trials} & \multicolumn{2}{c}{Cleaned} \\
-\cmidrule(lr){2-3}\cmidrule(lr){4-5}
-Checkpoint & EER & minDCF & EER & minDCF \\
+Checkpoint & EER & minDCF \\
 \midrule
-\nolinkurl{E5s6000_wise0.7}  & 4.685 & 0.267 & 3.008 & 0.216 \\
-\nolinkurl{E5s6000}          & 4.697 & 0.254 & 3.092 & 0.208 \\
-\nolinkurl{E5s4000}          & 4.705 & 0.259 & 3.050 & 0.217 \\
-\nolinkurl{E5s10000_wise0.7} & 4.725 & 0.261 & 3.021 & 0.210 \\
-\nolinkurl{E5s8000_wise0.7}  & 4.729 & 0.265 & 2.996 & 0.215 \\
-\nolinkurl{E5s8000}          & 4.805 & 0.253 & 3.113 & 0.206 \\
-\nolinkurl{E5s10000}         & 4.805 & 0.251 & 3.129 & 0.204 \\
-\nolinkurl{E8s5000_wise0.7}  & 4.853 & 0.257 & 3.104 & 0.210 \\
-\nolinkurl{E8s5000}          & 4.881 & 0.259 & 3.117 & 0.212 \\
+\nolinkurl{E5s6000_wise0.7}  & 4.685 & 0.267 \\
+\nolinkurl{E5s6000}          & 4.697 & 0.254 \\
+\nolinkurl{E5s4000}          & 4.705 & 0.259 \\
+\nolinkurl{E5s10000_wise0.7} & 4.725 & 0.261 \\
+\nolinkurl{E5s8000_wise0.7}  & 4.729 & 0.265 \\
+\nolinkurl{E5s8000}          & 4.805 & 0.253 \\
+\nolinkurl{E5s10000}         & 4.805 & 0.251 \\
+\nolinkurl{E8s5000_wise0.7}  & 4.853 & 0.257 \\
+\nolinkurl{E8s5000}          & 4.881 & 0.259 \\
 \bottomrule
 \end{tabular}
-\caption{Plain cosine scoring on the clean Public Test audio (no back-end). E5s$N$: recovery step $N$; E5s$N$\_wise0.7: $0.7\theta_{\mathrm{recovery},N}+0.3\theta_{\mathrm{init}}$; E8s5000: restart step 5,000; E8s5000\_wise0.7: $\theta_A$ (Section~\ref{sec:training}). Sorted by EER on all trials.}
+\caption{Plain cosine scoring on Public Test (no back-end). E5s$N$: recovery step $N$; E5s$N$\_wise0.7: $0.7\theta_{\mathrm{recovery},N}+0.3\theta_{\mathrm{init}}$; E8s5000: restart step 5,000; E8s5000\_wise0.7: $\theta_A$ (Section~\ref{sec:training}). Sorted by EER.}
 \label{tab:cosine}
 \end{table}
 
 \subsection{Submitted systems}
-Table~\ref{tab:final} reports both submitted systems. System~B is the plain-cosine winner of Table~\ref{tab:cosine}. System~A uses \nolinkurl{E8s5000_wise0.7}, whose plain-cosine EER is higher, but the back-end of Section~\ref{sec:scoring} lowers its EER from 4.853\% to 4.449\% over all trials and from 3.104\% to 2.852\% on cleaned trials; minDCF rises slightly, from 0.257 to 0.271. System~A therefore has the lower EER, while System~B has the lower minDCF and needs no back-end. The 2,061 excluded trials make up 4.1\% of Public Test but account for a disproportionate share of its errors.
+Table~\ref{tab:final} reports both submitted systems. System~B is the plain-cosine winner of Table~\ref{tab:cosine}. System~A uses \nolinkurl{E8s5000_wise0.7}, whose plain-cosine EER is higher, but the back-end of Section~\ref{sec:scoring} lowers its EER from 4.853\% to 4.449\%; minDCF rises slightly, from 0.257 to 0.271. System~A therefore has the lower EER, while System~B has the lower minDCF and needs no back-end.
 
 \section{Implementation and Deployment}
 % TODO: add training hardware, software versions, and training time.
