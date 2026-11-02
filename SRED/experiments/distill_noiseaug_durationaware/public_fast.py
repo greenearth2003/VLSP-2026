@@ -130,11 +130,15 @@ def backend(name, calib_tag):
     w = D[f"w_{name}"]
     q = D["q"]
     P = {k: v for k, v in C.items() if k.startswith("coh_") or k.startswith("q_coh")}
-    P.update(silver_whole=w, silver_speech=D[f"s_{name}"], silver_files=D["files"],
+    has_sp = f"s_{name}" in D
+    P.update(silver_whole=w, silver_speech=D[f"s_{name}"] if has_sp else w, silver_files=D["files"],
              q_silver_whole=np.c_[q[:, :2]], q_silver_speech=np.c_[q[:, 2:4]])
     out = {}
-    for lab, kw in (("qmf2_norm_speech (no AS-norm)", dict(norm=True, speech=True)),
-                    ("qmf2_norm_speech_asnorm (submitted, reference)", dict(norm=True, speech=True, asnorm=True))):
+    variants = [("qmf2_norm (no AS-norm, no speech view)", dict(norm=True))]
+    if has_sp:
+        variants += [("qmf2_norm_speech (no AS-norm)", dict(norm=True, speech=True)),
+                     ("qmf2_norm_speech_asnorm (submitted, reference)", dict(norm=True, speech=True, asnorm=True))]
+    for lab, kw in variants:
         r = run(P, tr, ia, ib, y, np.ones(len(y)), cl, **kw)
         out[lab] = {"all": r["silver_all"], "cleaned": r["silver_cleaned"], "minDCF": r["silver_minDCF"]}
         print(f"{name} {lab}: EER all {r['silver_all']:.3f}  cleaned {r['silver_cleaned']:.3f}  minDCF {r['silver_minDCF']:.3f}")
