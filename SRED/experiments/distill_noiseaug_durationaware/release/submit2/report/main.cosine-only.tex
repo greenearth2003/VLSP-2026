@@ -1,0 +1,183 @@
+\documentclass[11pt]{article}
+\usepackage[final]{acl}
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{inconsolata}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb,booktabs}
+\usepackage{xurl}
+\hypersetup{pdftitle={Compressing ReDimNet2 for Vietnamese Speaker Recognition: Sub-7M System for the VLSP 2026 SRED Challenge},pdfauthor={Nhat-Minh Nguyen and Thuc Tran Huu}}
+\newcommand{\ltn}{\operatorname{norm}}
+\title{Compressing ReDimNet2 for Vietnamese Speaker Recognition\\ Sub-7M System for the VLSP 2026 SRED Challenge}
+\author{Nhat-Minh Nguyen \qquad Thuc Tran Huu \\
+Cake Digital Bank, Vietnam \\
+\texttt{minh.nguyen12@cake.vn} \quad \texttt{thuc.tran@cake.vn}}
+\begin{document}
+\maketitle
+\begin{abstract}
+We describe our system for the VLSP 2026 Speaker Recognition on Edge Devices (SRED) challenge. A fine-tuned ReDimNet2-B6 teacher is compressed into a single network that produces 192-dimensional speaker embeddings with 6,947,208 parameters. Compression uses activation-whitened low-rank factorization. The compressed student is then trained on paired short and long crops with pointwise and relational knowledge distillation, and the selected checkpoint is interpolated with its compressed initialization. Checkpoints are compared by plain cosine EER on the clean official Public Test audio. Trials are scored by the cosine similarity of the two embeddings, with no back-end, calibration, or score normalization. The system obtains 4.685\% EER and 0.267 minDCF on Public Test. This report details its data preparation, compression, training objectives, optimization schedule, and inference procedure.
+\end{abstract}
+
+\section{Introduction}
+Speaker verification assigns a similarity score to a pair of recordings. The VLSP 2026 SRED challenge targets Vietnamese speech captured in heterogeneous social-media and edge-device conditions, with Equal Error Rate (EER) as the ranking metric and fewer than seven million parameters at inference. Background interference, microphone variation, and short utterances make this setting difficult: a compact network must preserve speaker identity while suppressing recording conditions that can be shared by different speakers.
+
+Our approach adapts a larger pretrained model, compresses it using real layer activations, then recovers its speaker discrimination by knowledge distillation (KD). The backbone is ReDimNet2, which extends dimension reshaping between one- and two-dimensional processing with temporal pooling \citep{yakovlev2026redimnet2}. The large teacher is used only during training; the submitted extractor is a single compressed network.
+
+The training recipe emphasizes very short speech. Each batch pairs a short, speech-dense crop with a longer random crop of the same speaker. The student learns both from the teacher's individual clean-crop embeddings (pointwise KD) and from the similarity structure among all embeddings in a batch (relational KD). Interpolating the selected recovery checkpoint with its compressed initialization yields the final extractor.
+
+Section~\ref{sec:data} describes the data and evaluation protocol, Section~\ref{sec:model} the embedding extractor, and Section~\ref{sec:training} the training pipeline, including compression. Section~\ref{sec:scoring} describes trial scoring, followed by results and implementation details.
+
+\section{Data and Evaluation Protocol}
+\label{sec:data}
+\subsection{Training data}
+The official Vi-SRED26 training list contains 58,404 utterances from 1,900 speaker IDs, totaling 145.9 hours of 16-kHz mono audio. We train on a cleaned list with 57,010 utterances from 1,823 speakers.
+% TODO: describe how the cleaned list was produced (which IDs/utterances were removed and why).
+
+\subsection{Test trials}
+Public Test contains 49,993 trials over 17,850 files; Private Test contains 278,410 trials over 37,354 files. An auxiliary cleaned list of Public Test retains 47,932 trials after excluding 2,061 trials involving suspected label or speech-content problems. We report all-trial results as the primary measure and cleaned results as a diagnostic; the latter do not replace the official evaluation protocol.
+
+Public Test is also used for development: checkpoints are selected by plain cosine EER on its clean official audio (Section~\ref{sec:selection}). No other held-out or pseudo-labelled data is used for selection, and scoring uses no trained back-end. Public Test results therefore describe performance on the development set; Private Test remains the held-out evaluation.
+
+\subsection{Evaluation metrics}
+For a similarity-score threshold $\tau$, a trial is accepted as same-speaker when its score is at least $\tau$. Let $P_{\mathrm{miss}}(\tau)$ be the fraction of target (same-speaker) trials rejected and $P_{\mathrm{fa}}(\tau)$ the fraction of non-target (different-speaker) trials accepted. EER is the average of these rates at the available threshold minimizing their absolute difference. We also report normalized minimum detection cost:
+\begin{equation}
+ \min_\tau\frac{pP_{\mathrm{miss}}(\tau)+(1-p)P_{\mathrm{fa}}(\tau)}{\min(p,1-p)},\quad p=0.01,
+\end{equation}
+Here $p$ is the prior probability of a target trial; both error costs are one. The minimization searches over score thresholds, and $\min(p,1-p)$ normalizes by the lower cost of always accepting or always rejecting. We report EER as a percentage and minDCF at $p=0.01$, on all Public Test trials and on the cleaned subset.
+
+\section{Embedding Extractor}
+\label{sec:model}
+We start from ReDimNet2-B6, which produces embeddings of 192 dimensions. The backbone checkpoint is \nolinkurl{b6-vb2+vox2+cnc2_v0-lm}, and the implementation has 12,459,296 parameters before compression. Its front end normalizes the waveform, applies pre-emphasis 0.97, and computes 72 log-mel bands with a 25-ms Hann window, a 10-ms hop, and a 512-point FFT. Six backbone stages combine residual 2D blocks with 1D convolutions and attention. Attentive statistics pooling computes weighted means and standard deviations. Batch normalization and a linear projection then map the 4032 pooled features to the embedding.
+
+Let $x$ denote an audio waveform, $f$ the embedding extractor, and $e=f(x)\in\mathbb R^{192}$ its 192-dimensional real output. We write $\ltn(v)=v/\|v\|_2$ for length normalization of a nonzero vector $v$, where $\|\cdot\|_2$ is the Euclidean norm. Thus $\hat e=\ltn(e)$ is the normalized embedding. Superscript $\top$ denotes transpose. For recordings $x_A$ and $x_B$ in a trial, the raw score is $s=\hat e_A^\top\hat e_B$, where the subscripts identify the two recordings. More generally, $\cos(v,w)=v^\top w/(\|v\|_2\|w\|_2)$ denotes cosine similarity between nonzero vectors of the same dimension. Training classification heads, KD projection layers, and teachers are removed for inference. Table~\ref{tab:params} gives the extractor parameter counts. The parameter criterion alone does not establish real-time CPU performance, activation-memory demand, or power efficiency.
+
+\begin{table}[t]
+\centering
+\begin{tabular}{lr}
+\toprule
+Network & Extractor parameters \\
+\midrule
+B6 teacher & 12,459,296 \\
+Compressed student & 6,947,208 \\
+\bottomrule
+\end{tabular}
+\caption{Parameter budget. The B6 teacher is used only during training. Scoring (Section~\ref{sec:scoring}) adds no parameters.}
+\label{tab:params}
+\end{table}
+
+\section{Training Pipeline}
+\label{sec:training}
+\subsection{Crop sampling and acoustic corruption}
+Each batch samples 32 speakers with two crops each: a speech-dense short crop of 0.5--2 seconds and a random long crop of 2.5--6 seconds. A fixed bank of 859,684 crops permits caching clean teacher targets. Corruption includes reverberation with probability 0.3, additive interference with probability 0.6 at 0--20 dB, shared backgrounds with probability 0.5, and channel/codec effects. Noise augmentation uses MUSAN \citep{snyder2015musan}, RIRS\_NOISES \citep{ko2017augmentation}, and backgrounds extracted from training recordings.
+
+The short and long crops belong to the same sampled speaker. The short crop emphasizes regions containing speech, while random long crops expose the model to more temporal and acoustic variation. Shared noise can therefore occur in both duration regimes. Additive sources include MUSAN noise, music, and babble, as well as point-source and isotropic noise from RIRS\_NOISES. Band limiting, equalization, and $\mu$-law coding simulate channel and codec distortions. The latter uses logarithmic waveform companding, with $\mu$ denoting the companding parameter. Crop identities are fixed in the bank, but corruption is applied on the fly; clean teacher targets remain associated with the corresponding uncorrupted crops.
+
+\subsection{Teacher adaptation}
+The B6 teacher uses SphereFace2 supervision \citep{wen2022sphereface2}, with classifier weights initialized from speaker centroids. Its head operates on the 192-dimensional embedding and is trained alone for 300 steps before the extractor is updated. AdamW then uses learning rates $10^{-5}$ for the backbone, $3\!\times\!10^{-5}$ for the embedding layer, and $10^{-3}$ for the head, with 500 warm-up steps and cosine decay to 5\%. Batch-normalization statistics remain frozen. The teacher trains for 8,000 steps; the step-6,000 checkpoint supplies both the compression initialization and clean-crop KD targets. Its classification head is not part of the inference extractor.
+
+\subsection{Activation-aware low-rank compression}
+Weight-only truncated singular value decomposition (SVD) minimizes matrix reconstruction error, which need not preserve outputs on actual speech activations. Motivated by activation-aware decomposition \citep{yuan2023asvd}, we instead approximate a layer using its input statistics. Let $d_{\mathrm{in}}$ and $d_{\mathrm{out}}$ be its input and output dimensions, so its weight matrix is $W\in\mathbb R^{d_{\mathrm{out}}\times d_{\mathrm{in}}}$. The columns of $X\in\mathbb R^{d_{\mathrm{in}}\times N}$ contain $N$ sampled input activation vectors. Define their uncentered second moment as $C=XX^\top/N$. A rank-$r$ replacement $BA$, with $A\in\mathbb R^{r\times d_{\mathrm{in}}}$ and $B\in\mathbb R^{d_{\mathrm{out}}\times r}$, minimizes the activation reconstruction objective
+\begin{equation}
+ \begin{aligned}
+ &\|(W-BA)X\|_F^2 \\
+ &\quad=N\operatorname{tr}((W-BA)C(W-BA)^\top).
+ \end{aligned}
+\end{equation}
+Here $r$ is the retained rank, $\|\cdot\|_F$ is the Frobenius norm (the square root of the sum of squared matrix entries), and $\operatorname{tr}$ is the trace (sum of diagonal entries). The factors $A$ and $B$ are layer matrices, distinct from the recording subscripts used in trial scoring. A rank-$r$ factorization stores $r(d_{\mathrm{in}}+d_{\mathrm{out}})$ weights instead of $d_{\mathrm{out}}d_{\mathrm{in}}$.
+
+We apply activation-whitened factorization to convolutional and linear weights reshaped as matrices. It factorizes $WC^{1/2}$ and folds $C^{-1/2}$ into the input factor; these denote the matrix square-root and inverse square-root transforms of the activation second moment. Each layer retains the same fraction of the singular-value energy, defined as the sum of squared retained singular values divided by the sum over all singular values. The common fraction is set to obtain 6,947,208 parameters, so ranks are allocated by retained output energy. The compressed weights initialize the student before KD recovery.
+
+\subsection{Clean-target and relational distillation}
+Student recovery uses the teacher's training recipe and adds two KD objectives. For crop index $i$ in a batch of $N_b$ crops, $x_i$ is the clean crop and $\tilde x_i$ its acoustically corrupted version. Let $f_S$ and $f_T$ denote the student and frozen teacher extractors, respectively. Their embeddings are $u_i=f_S(\tilde x_i)$ and $v_i=f_T(x_i)$, with the clean teacher outputs cached. A learned projection $P\in\mathbb R^{192\times192}$, initialized to the identity, aligns individual student embeddings with the teacher:
+\begin{equation}
+ \mathcal L_{\mathrm{point}}=\frac{1}{N_b}\sum_{i=1}^{N_b}
+ \left(1-\cos(Pu_i,v_i)\right).
+\end{equation}
+Here $N_b=64$ for 32 speakers with two crops each, and $\mathcal L_{\mathrm{point}}$ is the mean projected cosine-distance loss. The projection is a training component and is removed from the deployed embedding extractor.
+
+The relational objective transfers the similarity structure among the crops, following the relational KD principle \citep{park2019rkd}. Define $G^S_{ij}=\cos(u_i,u_j)$ and $G^T_{ij}=\cos(v_i,v_j)$ for crop indices $i,j\in\{1,\ldots,N_b\}$. Thus $G^S$ and $G^T$ are the student and teacher $N_b\times N_b$ cosine-similarity matrices; the superscripts indicate their source. The relational loss is
+\begin{equation}
+ \mathcal L_{\mathrm{rel}}=\operatorname{mean}_{i,j}
+ \operatorname{SmoothL1}_{\beta}(G^S_{ij}-G^T_{ij}).
+\end{equation}
+The operator $\operatorname{mean}_{i,j}$ averages the matrix-entry penalties. For a scalar residual $\Delta=G^S_{ij}-G^T_{ij}$, $\operatorname{SmoothL1}_{\beta}(\Delta)$ equals $\Delta^2/(2\beta)$ when $|\Delta|<\beta$, and $|\Delta|-\beta/2$ otherwise. Its positive transition parameter is $\beta=0.1$. Pointwise KD anchors each noisy crop to a clean teacher target, while relational KD preserves the teacher's geometry across speakers and durations. The combined recovery objective is
+\begin{equation}
+ \mathcal L=\mathcal L_{\mathrm{SphereFace2}}
+       +2\mathcal L_{\mathrm{point}}+\mathcal L_{\mathrm{rel}}.
+\end{equation}
+Here $\mathcal L$ is the total student loss and $\mathcal L_{\mathrm{SphereFace2}}$ is the supervised speaker-classification loss from its SphereFace2 head; the pointwise and relational loss weights are 2 and 1. The teacher is frozen during student recovery; only the student, classification head, and projection are optimized.
+
+\subsection{Weight interpolation}
+The student runs for 10,000 recovery steps. The step-6,000 checkpoint, selected by plain cosine EER on Public Test (Section~\ref{sec:selection}), is interpolated with the compressed initialization:
+\begin{equation}
+ \theta=0.7\theta_{\mathrm{recovery},6000}
+       +0.3\theta_{\mathrm{init}}.
+\end{equation}
+Here $\theta$ denotes the final extractor parameters, $\theta_{\mathrm{recovery},6000}$ the parameters at recovery step 6,000, and $\theta_{\mathrm{init}}$ the parameters of the compressed student before recovery. Both share the same low-rank structure, so interpolation yields a single network of the same size. We also trained a restart from the step-8,000 checkpoint for 5,000 further steps with a new head, optimizer, and seed; it is reported in Table~\ref{tab:cosine} but not used.
+
+\section{Trial Scoring}
+\label{sec:scoring}
+Each recording is embedded as a whole clip, and the trial score is the raw score $s=\hat e_A^\top\hat e_B$ of Section~\ref{sec:model}. No back-end, calibration, cohort, or score normalization is used, so each score depends only on the two recordings of its trial and on the extractor.
+
+\begin{table}[t]
+\centering
+\begin{tabular}{lrrrr}
+\toprule
+& \multicolumn{2}{c}{All trials} & \multicolumn{2}{c}{Cleaned} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+System & EER & minDCF & EER & minDCF \\
+\midrule
+Plain cosine (submitted) & 4.685 & 0.267 & 3.008 & 0.216 \\
+\bottomrule
+\end{tabular}
+\caption{Results of the submitted extractor, \nolinkurl{E5s6000_wise0.7}, on Public Test. EERs are percentages; minDCF uses target prior $p=0.01$. Cleaned denotes the auxiliary cleaned-trial subset (Section~\ref{sec:data}).}
+\label{tab:final}
+\end{table}
+
+\section{Results}
+\subsection{Checkpoint selection}
+\label{sec:selection}
+Table~\ref{tab:cosine} compares nine candidate extractors by plain cosine scoring of whole-clip embeddings on the clean official Public Test audio, without any back-end. Candidates are recovery checkpoints at steps 4,000--10,000, their interpolations with the compressed initialization ($0.7\theta_{\mathrm{recovery}}+0.3\theta_{\mathrm{init}}$), and the restart checkpoint with and without interpolation with its starting checkpoint. All candidates lie within 0.2 EER points of each other. By plain cosine, the interpolated recovery step-6,000 checkpoint is best (4.685\%) and is submitted; the restart checkpoints rank last.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+& \multicolumn{2}{c}{All trials} & \multicolumn{2}{c}{Cleaned} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+Checkpoint & EER & minDCF & EER & minDCF \\
+\midrule
+\nolinkurl{E5s6000_wise0.7}  & 4.685 & 0.267 & 3.008 & 0.216 \\
+\nolinkurl{E5s6000}          & 4.697 & 0.254 & 3.092 & 0.208 \\
+\nolinkurl{E5s4000}          & 4.705 & 0.259 & 3.050 & 0.217 \\
+\nolinkurl{E5s10000_wise0.7} & 4.725 & 0.261 & 3.021 & 0.210 \\
+\nolinkurl{E5s8000_wise0.7}  & 4.729 & 0.265 & 2.996 & 0.215 \\
+\nolinkurl{E5s8000}          & 4.805 & 0.253 & 3.113 & 0.206 \\
+\nolinkurl{E5s10000}         & 4.805 & 0.251 & 3.129 & 0.204 \\
+\nolinkurl{E8s5000_wise0.7}  & 4.853 & 0.257 & 3.104 & 0.210 \\
+\nolinkurl{E8s5000}          & 4.881 & 0.259 & 3.117 & 0.212 \\
+\bottomrule
+\end{tabular}
+\caption{Plain cosine scoring on the clean Public Test audio (no back-end). E5s$N$: recovery step $N$; E5s$N$\_wise0.7: interpolated with the compressed initialization (Section~\ref{sec:training}); E8s5000: restart step 5,000; E8s5000\_wise0.7: $0.7\theta_{\mathrm{restart},5000}+0.3\theta_{\mathrm{recovery},8000}$. Sorted by EER on all trials.}
+\label{tab:cosine}
+\end{table}
+
+\subsection{Final system}
+Table~\ref{tab:final} reports the submitted extractor, \nolinkurl{E5s6000_wise0.7}, with plain cosine scoring: 4.685\% EER over all trials and 3.008\% on cleaned trials, with minDCF values of 0.267 and 0.216. The 2,061 excluded trials make up 4.1\% of Public Test but account for a disproportionate share of its errors.
+
+\section{Implementation and Deployment}
+% TODO: add training hardware, software versions, and training time.
+At deployment, the extractor is one compressed network followed by a cosine score. Teachers, classification heads, and KD projections are discarded, and the interpolated weights are materialized before inference. The extractor count in Table~\ref{tab:params} excludes these training components. We have not measured edge CPU/NPU latency, peak activation memory, or energy.
+
+Reproduction requires the cleaned training list, compression ranks, crop bank and cached teacher targets, augmentation sources, and schedules, together with the recovery weights, the compressed initialization, and interpolation coefficient 0.7. The submission produces 278,410 finite trial scores in the supplied order. Training is not bitwise deterministic; exact scoring reproduction requires the submitted artifacts.
+
+\section{Conclusion}
+We presented a compact speaker verification system built by adapting and compressing ReDimNet2-B6. It combines short/long crop training, activation-whitened compression, pointwise and relational distillation, and weight interpolation. The extractor contains 6,947,208 parameters and obtains 4.685\% EER on Public Test with plain cosine scoring. Only a single compressed embedding network is used at inference; the larger teacher is used only during training.
+
+
+\bibliography{references}
+\end{document}
