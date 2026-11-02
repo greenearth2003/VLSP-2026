@@ -1,0 +1,1084 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Báo cáo kỹ thuật S5c + Q3</title>
+<meta name="description" content="Tài liệu nguồn cho technical report của đội greenearth03: hệ thống speaker verification S5c + Q3 (VLSP 2026 SRED).">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" crossorigin="anonymous"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\[',right:'\\]',display:true},{left:'\\(',right:'\\)',display:false}],throwOnError:false});"></script>
+<style>
+:root {
+  --bg: #fbfaf7; --fg: #1d1d1f; --muted: #5b5b66; --accent: #1f5fae; --accent-soft: #e8f0fb;
+  --border: #d9d6cf; --panel: #ffffff; --code: #f2f0ea; --stripe: #f6f4ef;
+  --ok: #1e7a46; --ok-bg: #e6f4ec; --warn: #8a5300; --warn-bg: #fff4dc; --bad: #b3261e; --bad-bg: #fdeceb;
+  --hl: #fff1a8; --svg-box: #ffffff; --svg-key: #e8f0fb; --svg-final: #e6f4ec; --svg-side: #f6f4ef;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #16171a; --fg: #e6e4df; --muted: #a3a1a9; --accent: #86b0ff; --accent-soft: #1d2a40;
+    --border: #383a40; --panel: #1e2024; --code: #25272c; --stripe: #1b1d21;
+    --ok: #6fd09a; --ok-bg: #16301f; --warn: #f0b45a; --warn-bg: #2f2615; --bad: #ff8a80; --bad-bg: #3a1c1a;
+    --hl: #4a4320; --svg-box: #1e2024; --svg-key: #1d2a40; --svg-final: #16301f; --svg-side: #23252a;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #16171a; --fg: #e6e4df; --muted: #a3a1a9; --accent: #86b0ff; --accent-soft: #1d2a40;
+  --border: #383a40; --panel: #1e2024; --code: #25272c; --stripe: #1b1d21;
+  --ok: #6fd09a; --ok-bg: #16301f; --warn: #f0b45a; --warn-bg: #2f2615; --bad: #ff8a80; --bad-bg: #3a1c1a;
+  --hl: #4a4320; --svg-box: #1e2024; --svg-key: #1d2a40; --svg-final: #16301f; --svg-side: #23252a;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font-family: "Be Vietnam Pro", "Segoe UI", system-ui, -apple-system, "Noto Sans", Arial, sans-serif;
+  font-size: 16px; line-height: 1.6;
+}
+main { max-width: 980px; margin: 0 auto; padding: 24px 16px 80px; }
+h1 { font-size: 1.9rem; line-height: 1.25; margin: 0.2em 0 0.3em; }
+h2 { font-size: 1.45rem; margin: 2.2em 0 0.6em; padding-top: 0.6em; border-top: 2px solid var(--border); }
+h3 { font-size: 1.15rem; margin: 1.6em 0 0.5em; }
+h4 { font-size: 1rem; margin: 1.2em 0 0.4em; color: var(--muted); }
+p, li { max-width: 78ch; }
+a { color: var(--accent); }
+code { font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace; font-size: 0.88em;
+  background: var(--code); padding: 0.05em 0.3em; border-radius: 4px; overflow-wrap: anywhere; }
+pre { background: var(--code); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px;
+  overflow-x: auto; font-size: 0.82rem; line-height: 1.45; }
+pre code { background: none; padding: 0; font-size: inherit; }
+.subtitle { color: var(--muted); margin-top: 0; }
+.meta { color: var(--muted); font-size: 0.92rem; }
+.table-wrap { overflow-x: auto; margin: 0.8em 0 1.2em; -webkit-overflow-scrolling: touch; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; background: var(--panel); }
+th, td { border: 1px solid var(--border); padding: 5px 8px; text-align: left; vertical-align: top; }
+th { background: var(--accent-soft); font-weight: 600; }
+tbody tr:nth-child(even) td { background: var(--stripe); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.best td { font-weight: 600; }
+tr.final td { background: var(--ok-bg) !important; font-weight: 600; }
+.note, .warn, .ok, .bad { border-left: 4px solid; padding: 8px 12px; margin: 1em 0; border-radius: 0 6px 6px 0; }
+.note { border-color: var(--accent); background: var(--accent-soft); }
+.warn { border-color: var(--warn); background: var(--warn-bg); }
+.ok { border-color: var(--ok); background: var(--ok-bg); }
+.bad { border-color: var(--bad); background: var(--bad-bg); }
+.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; }
+.toc ol { margin: 0.3em 0; padding-left: 1.4em; }
+.toc ol ol { font-size: 0.92rem; }
+.toc li { margin: 0.1em 0; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 1em 0; }
+.kpi { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+.kpi .v { font-size: 1.45rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.kpi .l { font-size: 0.82rem; color: var(--muted); }
+figure { margin: 1.2em 0; }
+figcaption { color: var(--muted); font-size: 0.88rem; margin-top: 0.3em; }
+svg.diagram { width: 100%; height: auto; display: block; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+svg.diagram text { fill: var(--fg); font-family: inherit; }
+svg.diagram .t1 { font-size: 13px; font-weight: 600; }
+svg.diagram .t2 { font-size: 11.5px; fill: var(--muted); }
+svg.diagram .box { fill: var(--svg-box); stroke: var(--border); stroke-width: 1.4; }
+svg.diagram .key { fill: var(--svg-key); stroke: var(--accent); stroke-width: 1.4; }
+svg.diagram .final { fill: var(--svg-final); stroke: var(--ok); stroke-width: 2; }
+svg.diagram .side { fill: var(--svg-side); stroke: var(--border); stroke-width: 1.2; stroke-dasharray: 4 3; }
+svg.diagram .arr { stroke: var(--muted); stroke-width: 1.6; fill: none; marker-end: url(#ah); }
+svg.diagram .arr-d { stroke: var(--accent); stroke-width: 1.4; fill: none; stroke-dasharray: 5 4; marker-end: url(#ahb); }
+svg.diagram .lbl { font-size: 11px; fill: var(--accent); }
+.katex-display { overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
+.small { font-size: 0.88rem; }
+.tag { display: inline-block; font-size: 0.78rem; padding: 0 6px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); }
+.placeholder { border: 2px dashed var(--warn); padding: 12px; border-radius: 8px; }
+@media (max-width: 600px) { body { font-size: 15px; } h1 { font-size: 1.5rem; } th, td { padding: 4px 6px; } }
+</style>
+</head>
+<body>
+<main>
+
+<h1>VLSP 2026 SRED — Báo cáo kỹ thuật hệ thống S5c + Q3</h1>
+<p class="subtitle">Tài liệu nguồn (source document) cho technical report chính thức của đội <b>greenearth03</b>.
+Mọi con số dưới đây được đối chiếu với <code>args.json</code>, log huấn luyện, <code>exp/public_eval/metrics.json</code>, các file điểm
+và file kết quả; chỗ nào nguồn không ghi thì viết "không ghi nhận".</p>
+<p class="meta">Phiên bản 02/11/2026 · repo <code>/home/jovyan/code/VLSP-2026/SRED</code> · hệ thống cuối: checkpoint
+<code>exp/ft/S5c_clean/step2500.pt</code> + back-end Q3 · file nộp private
+<code>releases/version_021126_S5cQ3/private/sred_S5cQ3_private_021126.zip</code> · công thức hiển thị bằng KaTeX (nếu không tải được CDN,
+công thức hiện dưới dạng LaTeX thô).</p>
+
+<nav class="toc" aria-label="Mục lục">
+<b>Mục lục</b>
+<ol>
+  <li><a href="#s1">Tóm tắt</a></li>
+  <li><a href="#s2">Dữ liệu</a>
+    <ol><li><a href="#s2-1">Train BTC và làm sạch nhãn</a></li><li><a href="#s2-2">300 speaker V</a></li>
+    <li><a href="#s2-3"><code>train_full_split</code></a></li><li><a href="#s2-4">Bank nền yên lặng từ train</a></li>
+    <li><a href="#s2-5">bg_noise</a></li><li><a href="#s2-6">Public test và private test</a></li></ol></li>
+  <li><a href="#s3">Kiến trúc</a>
+    <ol><li><a href="#s3-1">ReDimNet2-B6 và student nén</a></li><li><a href="#s3-2">Nén low-rank theo activation</a></li>
+    <li><a href="#s3-3">Pooling và embedding</a></li></ol></li>
+  <li><a href="#s4">Huấn luyện: chuỗi T1 → C2 → C2full → S2c → S5c</a>
+    <ol><li><a href="#s4-1">Sơ đồ lineage</a></li><li><a href="#s4-2">Công thức chung</a></li>
+    <li><a href="#s4-3">Các hàm loss</a></li><li><a href="#s4-4">Từng bước</a></li><li><a href="#s4-5">Augmentation của S2c và S5c</a></li>
+    <li><a href="#s4-6">Động học huấn luyện</a></li></ol></li>
+  <li><a href="#s5">Ensemble distillation (S5c)</a></li>
+  <li><a href="#s6">Back-end Q3 (QMF có SNR)</a></li>
+  <li><a href="#s7">Giao thức đánh giá</a></li>
+  <li><a href="#s8">Kết quả</a>
+    <ol><li><a href="#s8-1">Public test</a></li><li><a href="#s8-2">Bootstrap</a></li>
+    <li><a href="#s8-3">Theo độ dài</a></li><li><a href="#s8-4">File private</a></li></ol></li>
+  <li><a href="#s9">Tính hợp lệ</a></li>
+  <li><a href="#s10">Tái lập</a></li>
+  <li><a href="#s11">Hạn chế và hướng phát triển</a></li>
+  <li><a href="#s12">Phụ lục: thuật ngữ và nguồn</a></li>
+</ol>
+</nav>
+
+<!-- ===================================================================== 1 -->
+<h2 id="s1">1. Tóm tắt</h2>
+
+<p><b>Bài toán.</b> VLSP 2026 SRED là bài toán speaker verification tiếng Việt: với mỗi trial gồm hai clip 16 kHz, hệ
+thống trả về một điểm (cao = cùng người nói). Thước đo xếp hạng là EER (%) trên tập private (278,410 trial).</p>
+
+<p><b>Ràng buộc của BTC</b> (áp cho mọi bước của hệ thống cuối):</p>
+<ul>
+  <li><b>&lt; 7M tham số tại inference</b>, tính cả head và back-end. S5c có <b>6,917,480</b> tham số mạng; Q3 thêm 28 hằng số.</li>
+  <li><b>Chỉ dữ liệu speech của BTC</b> (train Vi-SRED26: 1,900 speaker). Không dữ liệu ngoài.</li>
+  <li><b>bg_noise chỉ được dùng làm noise.</b></li>
+  <li><b>Không transductive scoring</b>: không score normalisation (AS-norm, S-norm), không cohort lấy từ tập test, không query
+    expansion, không clustering tập test, không adapt trên test. Mỗi trial chỉ dùng hai clip của chính nó.</li>
+  <li><b>Nhãn public chỉ để đánh giá.</b> Pretrained chỉ lấy từ danh sách BTC; model lớn hơn 7M chỉ được làm teacher.</li>
+</ul>
+
+<p><b>Hệ thống cuối S5c + Q3.</b> Một mạng duy nhất: ReDimNet2-B6 nén low-rank (14 lớp 1×1) xuống 6,917,480 tham số,
+embedding 192 chiều. Điểm của trial là cosine giữa hai embedding, được hiệu chỉnh bằng QMF Q3 (logistic regression trên 9 đặc trưng: cosine,
+độ dài, SNR ước lượng), fit chỉ trên cohort lấy từ train. S5c được distill từ một <b>ensemble teacher</b> (T1 12.46M + S2c 6.9M, chỉ dùng
+lúc train) trên cùng crop đã augment mà student nhìn thấy.</p>
+
+<div class="ok"><b>Nguyên tắc của phiên bản này.</b>
+<ul>
+  <li><b>Dữ liệu:</b> chỉ train BTC. Nền ồn dùng khi train S2c và S5c là các đoạn yên lặng cắt từ chính các bản ghi train. bg_noise
+    chỉ được cộng vào cohort train khi fit Q3, đúng vai trò "noise".</li>
+  <li><b>Không dùng thông tin test:</b> các run S2c, S5c và việc fit Q3 không dùng audio, nhãn hay thống kê nào của public test hoặc
+    private test. SNR khi trộn nền lấy từ một phân phối cố định \(\mathcal U(0, 15)\) dB.</li>
+  <li><b>Không chọn checkpoint:</b> công thức S2c → S5c cố định trước khi chạy. Mỗi run lấy checkpoint ở step cuối của lịch đã định
+    (S2c step 6000, S5c step 2500), không có dev evaluation trong lúc train (<code>dev_trials = 0</code>). Public test chỉ được
+    chấm một lần, sau khi train xong, như đánh giá cuối của phiên bản này.</li>
+  <li><b>Không transductive:</b> mỗi trial chỉ dùng hai file của chính nó; không score normalisation, không AS-norm, không cohort test,
+    không query expansion.</li>
+  <li><b>&lt; 7M tham số</b> khi inference; teacher và ensemble chỉ chạy lúc train.</li>
+</ul></div>
+
+<div class="kpis">
+  <div class="kpi"><div class="v">4.389</div><div class="l">Public EER (%), all 49,993 trial (C2 + Q3: 4.409)</div></div>
+  <div class="kpi"><div class="v">2.681</div><div class="l">Public EER (%), cleaned 47,932 trial (C2 + Q3: 2.714)</div></div>
+  <div class="kpi"><div class="v">0.2689</div><div class="l">Public minDCF(0.01), all (C2 + Q3: 0.2875)</div></div>
+  <div class="kpi"><div class="v">6,917,480</div><div class="l">tham số tại inference (&lt; 7M), một mạng</div></div>
+  <div class="kpi"><div class="v">278,410</div><div class="l">trial trong file private; md5 <code>7ad1be9a…</code></div></div>
+</div>
+
+<div class="table-wrap"><table>
+<thead><tr><th>Hệ thống</th><th class="num">Public all EER</th><th class="num">minDCF all</th><th class="num">Public cleaned EER</th>
+<th class="num">minDCF cleaned</th><th>Private</th></tr></thead>
+<tbody>
+<tr class="final"><td>S5c + Q3 (hệ thống cuối)</td><td class="num">4.389</td><td class="num">0.2689</td><td class="num">2.681</td><td class="num">0.2174</td>
+<td><code>sred_S5cQ3_private_021126.zip</code> (tạo 02/11/2026); điểm leaderboard: chưa có tại thời điểm viết</td></tr>
+<tr><td>S5c, cosine thô (không back-end)</td><td class="num">4.601</td><td class="num">0.2685</td><td class="num">2.806</td><td class="num">—</td><td>—</td></tr>
+<tr><td>C2 + Q3 (lần nộp trước, mốc tham chiếu)</td><td class="num">4.409</td><td class="num">0.2875</td><td class="num">2.714</td><td class="num">0.2364</td>
+<td>leaderboard <b>5.6004</b></td></tr>
+<tr><td>C2, cosine thô</td><td class="num">4.761</td><td class="num">0.2853</td><td class="num">3.067</td><td class="num">—</td><td>—</td></tr>
+</tbody></table></div>
+<p class="small">Nguồn: <code>exp/public_eval/metrics.json</code> (khóa <code>S5c_clean</code> và <code>C2</code>). "cleaned" là danh sách con 47,932 trial
+(§2.6). minDCF dùng \(P_{\text{tar}} = 0.01\).</p>
+
+<p><b>Đọc nhanh.</b> Trên public, S5c + Q3 tốt hơn C2 + Q3 ở mọi metric, nhưng chênh lệch EER nhỏ và chưa có ý nghĩa thống kê
+(Δ −0.020, P(tốt hơn) 0.67, bootstrap theo cụm speaker, §8.2). minDCF giảm rõ hơn (−6.5 %), và cosine thô của S5c tốt hơn của C2
+(4.601 so với 4.761, P 0.977).</p>
+
+<p><b>Các thành phần chính, theo thứ tự trong chuỗi xử lý:</b></p>
+<ol>
+  <li><b>Nén teacher ReDimNet2-B6 (12.46M) xuống 6.92M</b> bằng phân rã low-rank theo activation, rồi distill từ teacher T1 (C2, C2full).</li>
+  <li><b>Huấn luyện chịu nhiễu với nền thật lấy từ train</b> (S2c): các đoạn yên lặng cắt từ chính các bản ghi train (quét 22,084 bản ghi), trộn với xác suất 0.8 ở SNR
+    \(\mathcal U(0,15)\) dB, cộng augmentation kênh (reverb, EQ, band-limit, μ-law, noise nhẹ); dùng toàn bộ train đã làm sạch, gồm cả 43 ID
+    hai giọng được tách thành hai lớp.</li>
+  <li><b>Ensemble distillation</b> (S5c): student học trung bình embedding của T1 và S2c trên đúng crop đã augment.</li>
+  <li><b>Back-end Q3</b>: QMF có đặc trưng độ dài và SNR, fit trên cohort train sạch và cohort train ồn hoá bằng bg_noise. Trên public, Q3 hạ EER
+    của S5c từ 4.601 (cosine) xuống 4.389.</li>
+</ol>
+
+<!-- ===================================================================== 2 -->
+<h2 id="s2">2. Dữ liệu</h2>
+
+<h3 id="s2-1">2.1 Train BTC và làm sạch nhãn</h3>
+<p>Nguồn: <code>/home/jovyan/data/VLSP2026/Vi-SRED26/train/</code>, WAV 16 kHz mono, danh sách chính thức
+<code>train/train.txt</code> (dòng <code>idXXXXX idXXXXX/NNNN.wav</code>).</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Danh sách</th><th class="num">Utterance</th><th class="num">Lớp (speaker)</th><th class="num">Giờ</th><th>Dùng cho</th></tr></thead>
+<tbody>
+<tr><td><code>train/train.txt</code> (chính thức)</td><td class="num">58,404</td><td class="num">1,900</td><td class="num">145.9</td><td>bank nền (§2.4); cohort Q3 (bỏ V, §6.3)</td></tr>
+<tr><td><code>lists/train_drop_bad.txt</code> (đã làm sạch)</td><td class="num">55,274</td><td class="num">1,842</td><td class="num">139.5</td><td>C2full</td></tr>
+<tr><td>drop-bad trừ 300 speaker V</td><td class="num">45,241</td><td class="num">1,557</td><td class="num">114.3</td><td>FF0, T1, C2, calibration của bước nén</td></tr>
+<tr class="best"><td><code>lists/train_full_split.txt</code></td><td class="num">57,837</td><td class="num">1,928</td><td class="num">145.0</td><td>S2c, S5c</td></tr>
+</tbody></table></div>
+<p class="small">Số utterance, lớp và giờ được đếm lại cho báo cáo này từ các danh sách và <code>lists/train_lengths.json</code>.</p>
+
+<p><b>Làm sạch</b> (<code>lists/train_drop_bad.txt</code>, từ phân tích chất lượng nhãn chỉ trên train):</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Loại bỏ</th><th class="num">Số lượng</th><th>Cách phát hiện</th></tr></thead>
+<tbody>
+<tr><td>ID chứa hai giọng (mixed-voice)</td><td class="num">56 ID, 2,708 utt</td><td>2-means trên embedding các utterance của ID: cosine giữa hai tâm &lt; 0.5 và cụm nhỏ ≥ 15 %</td></tr>
+<tr><td>Utterance nhãn đáng ngờ</td><td class="num">371</td><td>leave-one-out: utterance gần (cosine) tâm của speaker khác hơn tâm của chính nó (<code>eda/analyze_emb.py</code>, <code>eda/out/train_suspicious_labels.csv</code>)</td></tr>
+<tr><td>Trùng lặp giữa các ID</td><td class="num">51</td><td>cặp embedding gần như trùng nhau ở hai ID khác nhau (<code>eda/out/train_near_duplicates.csv</code>)</td></tr>
+</tbody></table></div>
+<p>Kết quả: 58,404 → 55,274 utterance. Lệnh chính xác tạo file <code>train_drop_bad.txt</code>: không ghi nhận (file có sẵn trong <code>lists/</code>,
+md5 <code>7524ddc5c8ec5700a28a8b6bcef0e57b</code>).</p>
+
+<h3 id="s2-2">2.2 300 speaker V</h3>
+<ul>
+  <li><b>Chọn</b> (<code>sred/valset.py</code>, seed 0): 300 speaker ngẫu nhiên trong số speaker có ≥ 6 utterance, tối đa 20 utterance mỗi
+    người (4,374 file).</li>
+  <li><b>Giai đoạn đầu</b> (FF0, T1, KD target ban đầu, calibration của bước nén, C2): 300 speaker này bị loại khỏi train và dùng làm
+    tập validation nội bộ dựng từ train.</li>
+  <li><b>Từ C2full trở đi</b>, V nằm lại trong train. KD target được mở rộng cho các utterance V bằng
+    <code>scripts/kd_targets.py --extend --keep-val</code>.</li>
+  <li>Cohort của Q3 vẫn là "train chính thức trừ V" (7,600 utterance của 1,600 speaker); đây vẫn là dữ liệu train.</li>
+</ul>
+
+<h3 id="s2-3">2.3 <code>train_full_split</code>: tách 43 ID hai giọng</h3>
+<p><code>eda/make_full_split_list.py</code> lấy <code>train_drop_bad.txt</code> rồi thêm lại các ID có hai giọng, mỗi ID thành hai lớp
+<code>&lt;id&gt;_a</code> / <code>&lt;id&gt;_b</code>. Giọng được gán theo đồng thuận embedding (<code>lists/vss_v1.json</code>): 43 trong 56 ID
+mixed-voice có phân tách giọng tin cậy. Hai lớp của một ID là hai người khác nhau trong cùng một nguồn ghi, tức hard negative có sẵn trong train.</p>
+<div class="table-wrap"><table>
+<thead><tr><th></th><th class="num">Utterance</th><th class="num">Lớp</th></tr></thead>
+<tbody>
+<tr><td><code>train_drop_bad.txt</code></td><td class="num">55,274</td><td class="num">1,842</td></tr>
+<tr><td>+ 43 ID tách đôi (86 lớp <code>_a</code>/<code>_b</code>)</td><td class="num">+2,563</td><td class="num">+86</td></tr>
+<tr class="best"><td><code>train_full_split.txt</code> (md5 <code>7fe342813f4a06f4bbd6b193147f25fa</code>)</td><td class="num">57,837</td><td class="num">1,928</td></tr>
+</tbody></table></div>
+
+<h3 id="s2-4">2.4 Bank nền yên lặng cắt từ train (<code>eda/build_trainbg_bank.py</code>)</h3>
+<p>Nguồn nhiễu chính khi train S2c và S5c là <b>nền thật của chính các bản ghi train</b>: khoảng lặng giữa các câu nói, chứa tiếng ồn phòng,
+tiếng máy và các âm thanh nền khác của nguồn ghi. Thuật toán (theo code):</p>
+<ol>
+  <li>Duyệt danh sách train chính thức theo thứ tự ngẫu nhiên (seed 0, tối đa 30,000 file), đọc 60 s đầu, 3 process.</li>
+  <li>Năng lượng khung 25 ms / hop 10 ms: \( e_t = 10\log_{10}\big(\tfrac{1}{400}\sum_n x_{t,n}^2 + 10^{-10}\big) \).</li>
+  <li>Khung yên lặng: \( e_t \lt P_{10}(e) + 8\ \text{dB} \) và \( e_t \gt -70\ \text{dBFS} \) (bỏ im lặng số).</li>
+  <li>Ghép các khung yên lặng liên tiếp (lấp khoảng hở ≤ 30 ms), giữ đoạn ≥ 0.3 s, cắt 30 ms ở hai mép, độ dài 0.25–4 s; lấy tối đa 4 đoạn dài
+    nhất mỗi bản ghi.</li>
+  <li>Bỏ đoạn bị clip (\(|x| \ge 0.999\)) và đoạn có tỉ lệ chunk hữu thanh \(\gt 0.6\) (tự tương quan đỉnh \(\gt 0.5\) trong dải 50–400 Hz trên
+    chunk 40 ms; nhiều khả năng là tiếng nói của chính bản ghi).</li>
+  <li>Ghi nối tiếp int16 vào <code>exp/noise/trainbg.raw</code> (đọc bằng memmap, không nạp vào RAM) và chỉ mục
+    <code>exp/noise/trainbg_index.csv</code> (rel, spk, start, length, level_db, lf150, pitched). Dừng khi đủ 300 phút.</li>
+</ol>
+<div class="table-wrap"><table>
+<thead><tr><th>Thống kê bank</th><th class="num">Giá trị</th></tr></thead>
+<tbody>
+<tr><td>Tổng thời lượng</td><td class="num">300.0 phút</td></tr>
+<tr><td>Số đoạn</td><td class="num">34,103</td></tr>
+<tr><td>Bản ghi train đã quét</td><td class="num">22,084</td></tr>
+<tr><td>Bản ghi có đóng góp ít nhất một đoạn / số speaker của chúng</td><td class="num">14,802 / 1,642</td></tr>
+<tr><td>Độ dài đoạn p5 / p50 / p95</td><td class="num">0.28 / 0.45 / 1.05 s</td></tr>
+<tr><td>Kích thước <code>trainbg.raw</code></td><td class="num">576 MB (int16)</td></tr>
+</tbody></table></div>
+
+<h3 id="s2-5">2.5 bg_noise (BTC duyệt chỉ để làm noise)</h3>
+<ul>
+  <li><b>Chuẩn bị</b> (<code>eda/prep_bg_noise.py</code>): bỏ bản mp3 trùng với wav; mono 16 kHz; chia 50/50 theo file, phân tầng theo loại
+    (<code>lists/bg_split.json</code>).</li>
+  <li><b>Nửa train:</b> 33 file, 25.4 phút (animal 4, breath 2, household 3, impact 4, music 3, speech 7, vehicle 7, weather 3), lưu thành
+    242 đoạn 6 s trong <code>exp/noise/bg_train.npy</code>. <b>Chỉ dùng để ồn hoá cohort train khi fit Q3</b> (§6.3).</li>
+  <li><b>Nửa còn lại</b> (32 file, 24.9 phút) không được dùng cho S5c hay Q3.</li>
+  <li>Không run nào trong lineage của S5c dùng bg_noise khi train mạng: FF0, T1, C2, C2full dùng babble trong batch và noise màu tổng hợp;
+    S2c, S5c dùng thêm nền cắt từ train (§2.4).</li>
+</ul>
+
+<h3 id="s2-6">2.6 Public test và private test</h3>
+<div class="table-wrap"><table>
+<thead><tr><th></th><th>Public test</th><th>Private test</th></tr></thead>
+<tbody>
+<tr><td>Trial</td><td>49,993 (25,000 target / 24,993 non-target)</td><td>278,410 (không có nhãn)</td></tr>
+<tr><td>File</td><td>17,850</td><td>37,354</td></tr>
+<tr><td>Dùng như thế nào</td><td>đánh giá cuối của phiên bản này, chấm một lần sau khi train xong</td><td>chỉ inference để tạo file nộp</td></tr>
+</tbody></table></div>
+<p><b>Danh sách cleaned</b> của public: 47,932 trial (24,025 target / 23,907 non-target), bỏ 2,061 trial chạm vào file nghi sai nhãn hoặc
+không có tiếng nói. Danh sách này đã được đội lập từ trước khi train S2c và S5c; nó chỉ dùng để báo cáo thêm một con số, không dùng để chọn gì.</p>
+
+<!-- ===================================================================== 3 -->
+<h2 id="s3">3. Kiến trúc</h2>
+
+<h3 id="s3-1">3.1 ReDimNet2-B6 (teacher 12.46M) và student nén (6,917,480)</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Tầng</th><th>Mô tả</th></tr></thead>
+<tbody>
+<tr><td>Input</td><td>waveform float32 16 kHz mono, [−1, 1]. Lúc inference: cắt 60 s đầu; nếu ngắn hơn 0.5 s thì lặp tín hiệu cho đủ 0.5 s; không VAD, không resample, không đổi gain.</td></tr>
+<tr><td>Front-end (trong mạng)</td><td>chuẩn hoá tín hiệu, pre-emphasis 0.97, STFT (cửa sổ 400 = 25 ms, hop 160 = 10 ms, FFT 512, Hann), <b>72 mel band</b>, log. SpecAugment tắt. Không có tham số học được.</td></tr>
+<tr><td>Backbone</td><td>ReDimNet2: stem 2D với C = 64 kênh, rồi 6 stage; mỗi stage là chuỗi block residual 2D (<code>basic_resnet</code>) và một block 1D <code>conv+att</code>. Cuối mỗi stage có các conv 1×1 "red_dim / exp_dim" chuyển giữa biểu diễn 2D [C·F] và 1D. Global context attention bật.</td></tr>
+<tr><td>Stage setup <code>(stride (f,t), n_blocks, conv_exp, kernels, att_red)</code></td><td><code>((1,1),3,3,[(3,3)],64)</code>, <code>((2,1),4,2,[(3,3)],64)</code>, <code>((1,2),5,2,[(3,3)],48)</code>, <code>((2,1),5,1,[(3,3)],48)</code>, <code>((1,2),4,0.75,[(3,3)],32)</code>, <code>((2,1),3,0.5,[(3,3)],24)</code></td></tr>
+<tr><td>Pooling</td><td><b>ASTP</b> (attentive statistics pooling, global context): 2016 kênh → mean + std = 4032 chiều (§3.3).</td></tr>
+<tr><td>Embedding</td><td>BatchNorm1d(4032) + Linear 4032 → <b>192</b> (không nén). Lúc chấm: L2-normalise, cosine.</td></tr>
+</tbody></table></div>
+<p class="small">Config đầy đủ (lưu trong <code>exp/b6c/t1/init.pt</code>, khóa <code>b6_cfg</code>): <code>C=64, F=72, hop_length=160, feat_type='tf', embed_dim=192,
+out_channels=224, pooling_func='ASTP', block_1d_type='conv+att', block_2d_type='basic_resnet', global_context_att=True, compress_tconvs=True,
+agg_gnorm=True, dual_agg=False, fm_weigthing_type='NC', group_divisor=1, return_2d_output=True, causal='none', spec_params={'do_preemph': True,
+'do_spec_aug': False, 'norm_signal': True}</code>. Checkpoint gốc: <code>b6-vb2+vox2+cnc2_v0-lm</code> (PalabraAI, trong danh sách BTC). Bản dùng
+trong repo là pack GGUF fp16 của OpenASR (<code>pretrained/OpenASR__redimnet2-b6-cn/redimnet2-b6-cn-fp16.oasr</code>, md5
+<code>d0bbe9d816146287118476a0c6c0b2db</code>), chuyển sang PyTorch bằng <code>sred/models.py::_load_redimnet2_gguf</code> (xem mục mở ở §9).</p>
+
+<p><b>Ngân sách tham số</b> (đếm trên <code>exp/ft/S5c_clean/step2500.pt</code> cho báo cáo này; buffer của front-end như mel filterbank không phải tham số):</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Thành phần</th><th class="num">B6 / T1</th><th class="num">S5c (và C2, C2full, S2c)</th></tr></thead>
+<tbody>
+<tr><td>backbone</td><td class="num">10,642,560</td><td class="num">5,965,512</td></tr>
+<tr><td>pool (ASTP)</td><td class="num">1,034,336</td><td class="num">169,568</td></tr>
+<tr><td>bn</td><td class="num">8,064</td><td class="num">8,064</td></tr>
+<tr><td>linear (4032 → 192)</td><td class="num">774,336</td><td class="num">774,336</td></tr>
+<tr><td>front-end</td><td class="num">0</td><td class="num">0</td></tr>
+<tr class="best"><td>Tổng</td><td class="num">12,459,296</td><td class="num">6,917,480</td></tr>
+<tr><td>Q3 (9 hệ số + intercept + 9 mean + 9 std)</td><td class="num">—</td><td class="num">28 hằng số</td></tr>
+</tbody></table></div>
+<p>Không có ở inference: head AAM, các lớp chiếu KD \(P_k\), teacher T1, ensemble teacher.</p>
+
+<h3 id="s3-2">3.2 Nén low-rank theo activation (<code>sred/compress.py</code>)</h3>
+<p>Mỗi lớp 1×1 được chọn \( y = Wx + b,\ W \in \mathbb{R}^{o \times i} \) được thay bằng hai lớp
+<code>LowRank(a: i→r không bias, b: r→o có bias)</code>: \( y \approx B(Ax) + b \), với \( A \in \mathbb{R}^{r\times i},\ B \in \mathbb{R}^{o \times r} \).</p>
+
+<p><b>Mục tiêu.</b> Gọi \( X = [x_1,\dots,x_N] \in \mathbb{R}^{i\times N} \) là activation đầu vào của lớp đó trên dữ liệu calibration
+(forward hook). Tìm \(A, B\) giữ đúng đầu ra trên phân phối activation thật, không chỉ xấp xỉ \(W\):</p>
+$$ \min_{A,B}\ \big\| (W - BA)\,X \big\|_F^2 \;=\; N\,\operatorname{tr}\!\big[(W-BA)\,C\,(W-BA)^\top\big],\qquad C = \tfrac{1}{N} X X^\top . $$
+<p><b>Lời giải.</b> Thêm damping rồi phân rã Cholesky:</p>
+$$ C_\delta = C + \delta\,\tfrac{\operatorname{tr} C}{i}\, I,\quad \delta = 10^{-2},\qquad C_\delta = L L^\top . $$
+<p>Khi đó \( \operatorname{tr}[(W-BA)C_\delta(W-BA)^\top] = \|(W-BA)L\|_F^2 \). Đặt \( M = WL = U\Sigma V^\top \) (SVD). Theo Eckart–Young, xấp xỉ
+hạng \(r\) tốt nhất của \(M\) là \(U_r\Sigma_rV_r^\top\), nên \(BAL = U_r\Sigma_rV_r^\top\):</p>
+$$ B = U_r \Sigma_r,\qquad A = V_r^\top L^{-1},\qquad \text{sai số} = \sum_{k>r} \sigma_k^2 . $$
+<p>Bias \(b\) giữ nguyên ở lớp \(B\). \(C\) là ma trận moment bậc hai (không trừ trung bình), tính bằng double precision.</p>
+
+<p><b>Chọn lớp và rank.</b></p>
+<ul>
+  <li><b>Ứng viên:</b> 15 lớp (mọi <code>red_dim_conv.0</code> / <code>exp_dim_conv</code>, <code>pool.linear1/2</code>, <code>linear</code>) và 24 block
+    residual 2D có thể bỏ (thay bằng identity).</li>
+  <li><b>Rank thử:</b> \( r = \max\!\big(8, \operatorname{round}(\rho \cdot \min(i,o))\big),\ \rho \in \{0.75, 0.5, 0.375, 0.25, 0.125\} \).
+    Số tham số sau nén: \( r(i+o) + o \), so với \( oi + o \).</li>
+  <li><b>Calibration:</b> 256 crop 3 s ngẫu nhiên của train trừ V (seed 1). <b>Đo fidelity:</b> 128 crop 3 s khác (seed 2):
+    \( \ell = 1 - \overline{\cos}\big(f_{\text{nén}}(x), f_{T1}(x)\big) \).</li>
+  <li><b>Greedy knapsack:</b> đo độ nhạy của từng hành động riêng lẻ; mỗi bước chọn hành động có tỉ lệ nhỏ nhất
+    $$ \text{ratio}(a) = \frac{\max(\ell_{\text{mới}} - \ell_{\text{hiện tại}},\ 10^{-9})}{\Delta\text{params}(a)} , $$
+    lặp cho tới khi tổng tham số tiết kiệm \( \ge 12{,}459{,}296 - 6{,}950{,}000 \) (ngân sách 6.95M).</li>
+  <li><b>Kết quả</b> (<code>python -m sred.compress --teacher exp/ft/W_T1_B6ft/avg.pt --tag t1</code>): 14 lớp low-rank, <code>linear</code> giữ
+    nguyên, <b>không bỏ block nào</b>; 6,917,480 tham số; fidelity trước khi train lại cos <b>0.9017</b> (khóa <code>info</code> trong
+    <code>exp/b6c/t1/init.pt</code>). Nén từ <b>T1</b> (B6 đã fine-tune), không phải từ B6 gốc.</li>
+</ul>
+<div class="table-wrap"><table>
+<thead><tr><th>Lớp</th><th>in → out</th><th class="num">Tham số trước</th><th class="num">Rank</th><th class="num">Tham số sau</th></tr></thead>
+<tbody>
+<tr><td><code>backbone.stage0.8.exp_dim_conv</code></td><td>72 → 4608</td><td class="num">336,384</td><td class="num">18</td><td class="num">88,848</td></tr>
+<tr><td><code>backbone.stage0.8.red_dim_conv.0</code></td><td>4608 → 72</td><td class="num">331,848</td><td class="num">27</td><td class="num">126,432</td></tr>
+<tr><td><code>backbone.stage1.9.exp_dim_conv</code></td><td>72 → 4608</td><td class="num">336,384</td><td class="num">18</td><td class="num">88,848</td></tr>
+<tr><td><code>backbone.stage1.9.red_dim_conv.0</code></td><td>4608 → 72</td><td class="num">331,848</td><td class="num">18</td><td class="num">84,312</td></tr>
+<tr><td><code>backbone.stage2.10.exp_dim_conv</code></td><td>96 → 4608</td><td class="num">446,976</td><td class="num">24</td><td class="num">117,504</td></tr>
+<tr><td><code>backbone.stage2.10.red_dim_conv.0</code></td><td>4608 → 96</td><td class="num">442,464</td><td class="num">24</td><td class="num">112,992</td></tr>
+<tr><td><code>backbone.stage3.9.exp_dim_conv</code></td><td>96 → 4608</td><td class="num">446,976</td><td class="num">36</td><td class="num">173,952</td></tr>
+<tr><td><code>backbone.stage3.9.red_dim_conv.0</code></td><td>4608 → 96</td><td class="num">442,464</td><td class="num">36</td><td class="num">169,440</td></tr>
+<tr><td><code>backbone.stage4.9.exp_dim_conv</code></td><td>144 → 4608</td><td class="num">668,160</td><td class="num">36</td><td class="num">175,680</td></tr>
+<tr><td><code>backbone.stage4.9.red_dim_conv.0</code></td><td>4608 → 144</td><td class="num">663,696</td><td class="num">36</td><td class="num">171,216</td></tr>
+<tr><td><code>backbone.stage5.8.exp_dim_conv</code></td><td>192 → 4608</td><td class="num">889,344</td><td class="num">24</td><td class="num">119,808</td></tr>
+<tr><td><code>backbone.stage5.8.red_dim_conv.0</code></td><td>4608 → 192</td><td class="num">884,928</td><td class="num">24</td><td class="num">115,392</td></tr>
+<tr><td><code>pool.linear1</code></td><td>6048 → 128</td><td class="num">774,272</td><td class="num">16</td><td class="num">98,944</td></tr>
+<tr><td><code>pool.linear2</code></td><td>128 → 2016</td><td class="num">260,064</td><td class="num">32</td><td class="num">70,624</td></tr>
+<tr class="best"><td colspan="2">Tổng toàn mạng</td><td class="num">12,459,296</td><td class="num"></td><td class="num">6,917,480 (−5,541,816)</td></tr>
+</tbody></table></div>
+
+<h3 id="s3-3">3.3 Pooling ASTP và embedding</h3>
+<p>Với đặc trưng khung \( h_t \in \mathbb{R}^{2016} \) (sau khi gộp kênh × tần số), global context
+\( \mu = \tfrac1T\sum_t h_t,\ \sigma = \sqrt{\operatorname{Var}_t(h_t) + 10^{-7}} \):</p>
+$$ \alpha_t = \operatorname{softmax}_t\!\Big( W_2 \tanh\big(W_1 [h_t;\mu;\sigma] + b_1\big) + b_2 \Big)\ \ (\text{theo từng kênh}), $$
+$$ \tilde\mu = \sum_t \alpha_t \odot h_t,\qquad \tilde\sigma = \sqrt{\max\!\big(\textstyle\sum_t \alpha_t \odot h_t^2 - \tilde\mu^2,\ 10^{-7}\big)},\qquad
+e = \operatorname{Linear}_{4032\to192}\big(\operatorname{BN}([\tilde\mu;\tilde\sigma])\big). $$
+<p>\(W_1\) (6048 → 128) và \(W_2\) (128 → 2016) là <code>pool.linear1/2</code>, đều low-rank trong student. Điểm thô của một trial là
+\( s = \hat e_A^\top \hat e_B \) với \( \hat e = e/\|e\|_2 \).</p>
+
+<!-- ===================================================================== 4 -->
+<h2 id="s4">4. Huấn luyện: chuỗi T1 → KD targets → nén → C2 → C2full → S2c → S5c</h2>
+
+<h3 id="s4-1">4.1 Sơ đồ lineage</h3>
+<figure>
+<svg class="diagram" viewBox="0 0 940 680" role="img" aria-label="Chuỗi huấn luyện từ ReDimNet2-B6 tới S5c">
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8a8a94"/></marker>
+    <marker id="ahb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4f86d6"/></marker>
+  </defs>
+  <!-- main chain -->
+  <rect class="box" x="30" y="16" width="420" height="62" rx="8"/>
+  <text class="t1" x="44" y="40">ReDimNet2-B6 pretrained (12,459,296)</text>
+  <text class="t2" x="44" y="60">b6-vb2+vox2+cnc2_v0-lm (danh sách BTC) · chỉ làm teacher</text>
+  <path class="arr" d="M240,78 L240,104"/>
+  <rect class="key" x="30" y="106" width="420" height="62" rx="8"/>
+  <text class="t1" x="44" y="130">T1 — fine-tune 3000 step, WiSE α = 0.5 (step 2000)</text>
+  <text class="t2" x="44" y="150">12.46M · drop-bad trừ V · teacher, chỉ dùng lúc train</text>
+  <path class="arr" d="M240,168 L240,194"/>
+  <rect class="box" x="30" y="196" width="420" height="62" rx="8"/>
+  <text class="t1" x="44" y="220">Nén low-rank 14 lớp 1×1 → b6c_t1</text>
+  <text class="t2" x="44" y="240">6,917,480 tham số · fidelity cos 0.9017 · không bỏ block</text>
+  <path class="arr" d="M240,258 L240,284"/>
+  <rect class="box" x="30" y="286" width="420" height="62" rx="8"/>
+  <text class="t1" x="44" y="310">C2 — KD 6000 step, lr 5e-5 (step cuối)</text>
+  <text class="t2" x="44" y="330">KD T1 crop sạch λ20 + target λ2 · aug mặc định</text>
+  <path class="arr" d="M240,348 L240,374"/>
+  <rect class="box" x="30" y="376" width="420" height="62" rx="8"/>
+  <text class="t1" x="44" y="400">C2full — +300 speaker V, 3000 step, lr 3e-5</text>
+  <text class="t2" x="44" y="420">cùng công thức C2 · drop-bad đầy đủ · step cuối</text>
+  <path class="arr" d="M240,438 L240,464"/>
+  <rect class="key" x="30" y="466" width="420" height="62" rx="8"/>
+  <text class="t1" x="44" y="490">S2c — full_split + nền train, 6000 step, lr 3e-5</text>
+  <text class="t2" x="44" y="510">KD T1 crop sạch λ20 + target λ2 · nền p 0.8, SNR U(0, 15)</text>
+  <path class="arr" d="M240,528 L240,594"/>
+  <rect class="final" x="30" y="596" width="420" height="66" rx="8"/>
+  <text class="t1" x="44" y="621">S5c — distill từ EnsembleTeacher(T1, S2c), 2500 step</text>
+  <text class="t2" x="44" y="642">teacher thấy crop đã augment · public EER 4.389 (Q3)</text>
+  <!-- right column -->
+  <rect class="box" x="520" y="16" width="400" height="62" rx="8"/>
+  <text class="t1" x="534" y="40">ReDimNet-M pretrained</text>
+  <text class="t2" x="534" y="60">M-vb2+vox2+cnc-ft_mix (danh sách BTC)</text>
+  <path class="arr" d="M720,78 L720,104"/>
+  <rect class="side" x="520" y="106" width="400" height="62" rx="8"/>
+  <text class="t1" x="534" y="130">FF0 — fine-tune 3000 step, WiSE α = 0.5</text>
+  <text class="t2" x="534" y="150">chỉ dùng để tính KD target</text>
+  <path class="arr" d="M720,168 L720,194"/>
+  <path class="arr" d="M450,137 C490,137 490,226 518,226"/>
+  <rect class="side" x="520" y="196" width="400" height="62" rx="8"/>
+  <text class="t1" x="534" y="220">KD targets cả clip (≤ 20 s, audio sạch)</text>
+  <text class="t2" x="534" y="240">exp/kd/{FF0,T1}{,_full,_split}.npz · 192-d, L2-norm</text>
+  <path class="arr-d" d="M640,258 L640,560"/>
+  <path class="arr-d" d="M640,317 L452,317"/>
+  <path class="arr-d" d="M640,407 L452,407"/>
+  <path class="arr-d" d="M640,497 L452,497"/>
+  <path class="arr-d" d="M640,560 C640,600 520,612 452,612"/>
+  <text class="lbl" x="648" y="300">λ = 2 qua phép chiếu P_k</text>
+  <text class="lbl" x="648" y="316">(C2, C2full, S2c, S5c)</text>
+  <rect class="key" x="700" y="440" width="220" height="110" rx="8"/>
+  <text class="t1" x="712" y="464">EnsembleTeacher</text>
+  <text class="t2" x="712" y="484">l2n( l2n f_T1(x̃) + l2n f_S2c(x̃) )</text>
+  <text class="t2" x="712" y="502">T1 + S2c đóng băng, chỉ khi train</text>
+  <text class="t2" x="712" y="520">KD cùng crop đã augment</text>
+  <text class="t2" x="712" y="538">λ = 20</text>
+  <path class="arr" d="M450,505 C560,520 600,470 698,470"/>
+  <path class="arr" d="M810,550 C810,610 600,640 452,640"/>
+  <text class="lbl" x="470" y="590">S2c → teacher</text>
+</svg>
+<figcaption>Hình 1. Lineage của S5c. Khung xanh dương: model then chốt; khung xanh lá: hệ thống cuối; khung nét đứt: model phụ chỉ dùng lúc train.
+Mũi tên nét đứt: KD tới embedding cả clip tính trước (target), qua phép chiếu học được.</figcaption>
+</figure>
+
+<h3 id="s4-2">4.2 Công thức huấn luyện chung (<code>sred/train.py</code>)</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Hạng mục</th><th>Thiết lập</th></tr></thead>
+<tbody>
+<tr><td>Đọc dữ liệu</td><td>mỗi item: một cửa sổ ngẫu nhiên 3.0 s đọc từ file (file ngắn hơn thì lặp tile). Mỗi micro-batch cắt tiếp một crop dài
+\(L \sim \mathcal U(1.5, 3.0)\) s làm tròn theo lưới 0.25 s (ít shape cho cuDNN), ở một vị trí ngẫu nhiên trong cửa sổ 3 s (trong code hiện tại, dùng cho S2c/S5c, vị trí này chung cho mọi item của micro-batch; bản thân cửa sổ 3 s của mỗi item đã ngẫu nhiên).</td></tr>
+<tr><td>Sampler</td><td>luồng vô hạn các utterance đã xáo trộn (mỗi lượt đi qua toàn bộ danh sách theo một hoán vị mới; không cân bằng speaker, không đào cặp). Áp cho mọi run trong lineage.</td></tr>
+<tr><td>Batch</td><td>32 utterance. T1, C2, C2full, S2c, S5c: 2 micro-batch × 16 (gradient accumulation 2; tương đương batch 32 vì BN đóng băng). Micro-batch \(c\) lấy các vị trí \(c, c+2, \dots\).</td></tr>
+<tr><td>Độ chính xác</td><td>bf16 autocast; TF32 bật cho matmul và cuDNN.</td></tr>
+<tr><td>BatchNorm</td><td>đóng băng (<code>freeze_bn</code>): mọi lớp BN ở chế độ eval, running stats không cập nhật; \(\gamma, \beta\) vẫn train.</td></tr>
+<tr><td>Optimizer</td><td>AdamW (betas/eps mặc định PyTorch). Nhóm 0: toàn bộ tham số mạng, lr = <code>lr</code>, weight decay \(10^{-4}\). Nhóm 1: head AAM + các phép chiếu KD \(P_k\), lr \(2\cdot10^{-3}\), weight decay 0.</td></tr>
+<tr><td>Gradient clipping</td><td>chuẩn toàn cục 5.0 trên mọi nhóm tham số.</td></tr>
+<tr><td>Head init</td><td>tâm speaker từ embedding cả clip của model khởi tạo trên cohort ≤ 5 utterance/lớp (seed 0) của chính danh sách train: \( c_j = \operatorname{l2n}\big(\sum_{u \in \mathcal{C}_j} \operatorname{l2n}(e_u)\big) \); mỗi sub-centre \( w_{j,k} = c_j + 0.01\,\varepsilon,\ \varepsilon\sim\mathcal N(0,I) \). Checkpoint <code>step&lt;N&gt;.pt</code> không lưu head, nên mỗi run khởi tạo lại head theo cách này (S2c: 1,928 lớp từ C2full; S5c: từ S2c).</td></tr>
+<tr><td>Dev evaluation</td><td>tắt (<code>dev_trials = 0</code>) ở mọi run trong lineage; log in <code>dev_eer=inf/nan</code>.</td></tr>
+<tr><td>Checkpoint</td><td><code>step&lt;N&gt;.pt</code> mỗi <code>save_every</code> step (500 ở S2c/S5c); <code>resume.pt</code> (model, head, optimizer, step) mỗi 100 step để pod restart chỉ mất ≤ 100 step. Hệ thống = checkpoint ở step cuối của lịch, không trung bình, không chọn. File <code>best.pt</code> trong thư mục run chỉ là bản lưu trạng thái step cuối (không có dev nên không có gì để so).</td></tr>
+</tbody></table></div>
+
+<p><b>Lịch learning rate</b> (step \(n = 1,\dots,N\), warmup \(W\), \(H\) step chỉ train head):</p>
+$$ \mu(n) = \begin{cases} \dfrac{n+1}{W}, &amp; n \lt W \\[6pt] 0.05 + 0.95\cdot\tfrac12\Big(1+\cos\big(\pi \min(1, \tfrac{n-W}{N-W})\big)\Big), &amp; n \ge W \end{cases}
+\qquad \text{lr}_g(n) = \text{lr}_g^{0}\,\mu(n), $$
+<p>và với \( n \le H \): \( \text{lr}_g(n) = 0 \) cho mọi nhóm trừ nhóm head. LR cuối cùng bằng 5 % đỉnh. Ở mọi run trong lineage
+\(W \le H\) (\(W = H = 200\) cho FF0/T1/C2/S2c; \(W = 100, H = 200\) cho C2full; \(W = H = 100\) cho S5c), nên thực chất
+<b>warmup chỉ áp cho head</b>; backbone bắt đầu ở bước \(H+1\) với \(\mu \approx 1\). Log khớp: S2c lr 3.00e-5 ở step 300, 1.50e-6 ở step 6000;
+S5c 1.99e-5 ở step 200, 1.00e-6 ở step 2500.</p>
+
+<h3 id="s4-3">4.3 Các hàm loss</h3>
+<p>Ký hiệu: \(x_i\) là crop sạch, \(\tilde x_i\) là crop sau augmentation (§4.5), \(f_s\) là student, \(y_i\) là lớp, \(u(i)\) là utterance gốc,
+\(B = 16\) là kích thước micro-batch.</p>
+
+<h4>(a) SubCenter-AAM (K = 3 sub-centre, margin m = 0.2, scale s = 30)</h4>
+$$ c_j = \operatorname{clip}\Big(\max_{k=1..K} \hat w_{j,k}^\top \hat e,\ -1+10^{-7},\ 1-10^{-7}\Big),\qquad \theta_j = \arccos c_j, $$
+$$ \psi(\theta_y) = \begin{cases} \cos(\theta_y + m), &amp; \theta_y + m \lt \pi \\ c_y - m\sin m, &amp; \text{ngược lại} \end{cases} $$
+$$ \mathcal L_{\text{AAM}} = -\frac1B\sum_{i} \log \frac{e^{s\,\psi(\theta_{y_i})}}{e^{s\,\psi(\theta_{y_i})} + \sum_{j\neq y_i} e^{s\,c_j}} . $$
+<p>Với \(\hat e = \operatorname{l2n}(f_s(\tilde x))\), \(\hat w_{j,k}\) là sub-centre đã chuẩn hoá. Accuracy trong log = tỉ lệ \(\arg\max_j c_j = y\).</p>
+
+<h4>(b) KD cùng crop (same-crop KD), trọng số λ<sub>kd</sub> = 20</h4>
+$$ \mathcal L_{\text{kd}} = \frac1B \sum_i \Big(1 - \cos\big(f_s(\tilde x_i),\ f_t(z_i)\big)\Big),\qquad
+z_i = \begin{cases} x_i &amp; \text{teacher\_clean = 1}\ \ (\text{C2, C2full, S2c; teacher } f_t = \text{T1}) \\ \tilde x_i &amp; \text{teacher\_clean = 0}\ \ (\text{S5c; teacher } f_t = \text{ensemble}) \end{cases} $$
+<p>\(x_i\) là đúng crop đó trước mọi augmentation (cùng file, cùng vị trí, cùng độ dài). Student và teacher cùng 192 chiều nên không có phép chiếu.
+Teacher đóng băng, chạy trong <code>torch.no_grad()</code>.</p>
+
+<h4>(c) KD tới target cả clip qua phép chiếu học được, trọng số λ<sub>tgt</sub> = 2</h4>
+$$ \mathcal L_{\text{tgt}} = \frac{1}{K}\sum_{k=1}^{K} \frac1B\sum_i \Big(1 - \cos\big(P_k\, f_s(\tilde x_i),\ t_{k,u(i)}\big)\Big),\qquad K = 2\ \ (\text{FF0}, \text{T1}). $$
+<p>\(t_{k,u}\) là embedding L2-normalised của <b>cả utterance</b> \(u\) (≤ 20 s đầu, audio sạch) do teacher \(k\) tính trước
+(<code>scripts/kd_targets.py</code>, lưu fp16). \(P_k \in \mathbb{R}^{192\times192}\) khởi tạo trực giao, học ở lr \(2\cdot10^{-3}\).
+Student chỉ thấy crop 1.5–3 s đã augment nhưng phải dự đoán "cách teacher nhìn cả utterance sạch" (privileged information). FF0 nằm trong không gian
+embedding khác nên bắt buộc phải qua \(P_k\).</p>
+
+<h4>(d) Loss tổng</h4>
+$$ \mathcal L = \mathcal L_{\text{AAM}} + \lambda_{\text{kd}}\,\mathcal L_{\text{kd}} + \lambda_{\text{tgt}}\,\mathcal L_{\text{tgt}},\qquad
+\nabla = \tfrac12\big(\nabla\mathcal L^{(c=0)} + \nabla\mathcal L^{(c=1)}\big). $$
+<div class="table-wrap"><table>
+<thead><tr><th>Stage</th><th class="num">λ<sub>kd</sub> (teacher)</th><th>Teacher thấy</th><th class="num">λ<sub>tgt</sub> (targets)</th></tr></thead>
+<tbody>
+<tr><td>FF0, T1</td><td class="num">0</td><td>—</td><td class="num">0</td></tr>
+<tr><td>C2</td><td class="num">20 (T1)</td><td>crop sạch</td><td class="num">2 ({FF0, T1}, 45,241 utt)</td></tr>
+<tr><td>C2full</td><td class="num">20 (T1)</td><td>crop sạch</td><td class="num">2 ({FF0, T1}_full, 55,274 utt)</td></tr>
+<tr><td>S2c</td><td class="num">20 (T1)</td><td>crop sạch (trước augmentation)</td><td class="num">2 ({FF0, T1}_split, 57,837 utt)</td></tr>
+<tr class="final"><td>S5c</td><td class="num">20 (ensemble: T1 + S2c)</td><td><b>cùng crop đã augment</b></td><td class="num">2 ({FF0, T1}_split)</td></tr>
+</tbody></table></div>
+<p class="small">Code còn nhiều loss tuỳ chọn khác (hinge trên cặp, relational KD, consistency, …); tất cả đều tắt ở mọi run trong lineage (trọng số 0 trong <code>args.json</code>, hoặc tuỳ chọn chưa có trong code ở thời điểm chạy run đó).</p>
+
+<h3 id="s4-4">4.4 Từng bước của chuỗi</h3>
+<p>Siêu tham số lấy từ <code>exp/ft/&lt;run&gt;/args.json</code>. Chung cho mọi run dưới đây: bs 32, crop 1.5–3 s, bf16, BN đóng băng, head lr 2e-3,
+wd 1e-4, AAM (K 3, m 0.2, s 30), seed 0, không dev evaluation.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Bước</th><th>Init</th><th>Dữ liệu</th><th>Augmentation</th><th class="num">Step</th><th class="num">lr</th><th class="num">W / H</th><th>Checkpoint dùng tiếp</th></tr></thead>
+<tbody>
+<tr><td><b>FF0</b> (KD target phụ)</td><td>ReDimNet-M <code>M-vb2+vox2+cnc-ft_mix</code></td><td>drop-bad − V</td><td>mặc định</td><td class="num">3000</td><td class="num">2e-5</td><td class="num">200 / 200</td><td>step 2000 + WiSE α 0.5 → <code>W_FF0_full/avg.pt</code></td></tr>
+<tr><td><b>T1</b> (teacher)</td><td>B6 pretrained</td><td>drop-bad − V</td><td>mặc định</td><td class="num">3000</td><td class="num">2e-5</td><td class="num">200 / 200</td><td>step 2000 + WiSE α 0.5 → <code>W_T1_B6ft/avg.pt</code></td></tr>
+<tr><td><b>KD targets</b></td><td colspan="7">embedding cả clip (≤ 20 s, sạch) của FF0 và T1: <code>FF0/T1.npz</code> (45,241) → <code>*_full.npz</code> (+V, 55,274) → <code>*_split.npz</code> (+43 ID tách, 57,837); bản sau mở rộng bản trước bằng <code>--extend --keep-val</code> (chỉ tính utterance còn thiếu)</td></tr>
+<tr><td><b>Nén</b></td><td>T1</td><td>256 crop calibration (− V)</td><td>—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td><code>exp/b6c/t1/init.pt</code>, cos 0.9017</td></tr>
+<tr><td><b>C2</b></td><td><code>b6c_t1</code></td><td>drop-bad − V</td><td>mặc định</td><td class="num">6000</td><td class="num">5e-5</td><td class="num">200 / 200</td><td>step 6000 (step cuối)</td></tr>
+<tr><td><b>C2full</b></td><td>C2 step 6000</td><td>drop-bad (+V)</td><td>mặc định</td><td class="num">3000</td><td class="num">3e-5</td><td class="num">100 / 200</td><td>step 3000 (step cuối)</td></tr>
+<tr><td><b>S2c</b></td><td>C2full step 3000</td><td><code>train_full_split</code></td><td>kênh nhẹ + nền train p 0.8, SNR U(0, 15)</td><td class="num">6000</td><td class="num">3e-5</td><td class="num">200 / 200</td><td>step 6000 (step cuối)</td></tr>
+<tr class="final"><td><b>S5c</b></td><td>S2c step 6000</td><td><code>train_full_split</code></td><td>như S2c</td><td class="num">2500</td><td class="num">2e-5</td><td class="num">100 / 100</td><td>step 2500 (step cuối) = hệ thống</td></tr>
+</tbody></table></div>
+<p class="small"><b>WiSE-FT:</b> \( \theta = \alpha\,\theta_{\text{step }2000} + (1-\alpha)\,\theta_{\text{pretrained}},\ \alpha = 0.5 \)
+(<code>scripts/wise_interp.py</code>; buffer không phải float lấy từ checkpoint fine-tune). FF0 train với batch 32 trong một lượt (không accumulation).
+Teacher của C2, C2full, S2c là T1 (<code>exp/ft/W_T1_B6ft/avg.pt</code>).</p>
+
+<h3 id="s4-5">4.5 Augmentation của S2c và S5c</h3>
+<p>Augmentation chạy trên GPU, độc lập cho từng item, theo hai tầng: (i) augmentation kênh (<code>sred.augment.Augmenter</code>, cấu hình nhẹ) rồi (ii)
+trộn nền thật từ bank train (§2.4), áp <b>sau cùng</b>, như nền cộng vào bản ghi đã hoàn chỉnh. Teacher T1 của S2c nhận crop gốc \(x\); ensemble teacher
+của S5c nhận \(\tilde x\).</p>
+
+<h4>(i) Augmentation kênh (thứ tự áp dụng)</h4>
+<div class="table-wrap"><table>
+<thead><tr><th>Phép biến đổi</th><th class="num">p (S2c, S5c)</th><th class="num">p (mặc định: FF0, T1, C2, C2full)</th><th>Chi tiết</th></tr></thead>
+<tbody>
+<tr><td>Reverb</td><td class="num">0.2</td><td class="num">0.3</td><td>RIR tổng hợp dài 0.6 s: \(h[n] = \varepsilon_n\, e^{-6.9078\,n/(f_s \mathrm{RT60})}\), \(\varepsilon_n \sim \mathcal N(0,1)\), \(\mathrm{RT60} \sim \mathcal U(0.2, 0.9)\) s; \(h[0] = 1\), \(h[1..39] = 0\); chuẩn hoá \(\|h\|_2 = 1\); tín hiệu sau tích chập được đưa về RMS ban đầu</td></tr>
+<tr><td>Noise cộng</td><td class="num">0.15</td><td class="num">0.6</td><td>xác suất bằng nhau: babble (tổng 1–3 crop ngẫu nhiên trong cùng micro-batch, mỗi crop chuẩn RMS 1) ở SNR \(\mathcal U(13, 20)\) dB, hoặc noise màu \(1/f^{\beta}\), \(\beta \sim \mathcal U(0, 2)\) (rút một lần cho mỗi micro-batch), SNR \(\mathcal U(5, 20)\) dB</td></tr>
+<tr><td>Band-limit kiểu điện thoại</td><td class="num">0.1</td><td class="num">0.2</td><td>\(|H(f)| = \big(1+(f/f_h)^8\big)^{-1/2}\big(1+(f_l/f)^4\big)^{-1/2}\), \(f_l \sim \mathcal U(100, 400)\) Hz, \(f_h \sim \mathcal U(3000, 4000)\) Hz</td></tr>
+<tr><td>EQ ngẫu nhiên</td><td class="num">0.3</td><td class="num">0.3</td><td>2 band Gauss trên trục \(\ln f\): tâm log-đều 150–6000 Hz, độ rộng \(\mathcal U(0.3, 1.2)\), gain \(\mathcal U(-8, 8)\) dB; cộng tilt \(\mathcal U(-3, 3)\) dB/octave quanh 1 kHz</td></tr>
+<tr><td>μ-law</td><td class="num">0.05</td><td class="num">0.1</td><td>lượng tử μ-law 256 mức trên tín hiệu đã chuẩn hoá đỉnh, rồi trả lại biên độ</td></tr>
+<tr><td>Giới hạn đỉnh</td><td class="num">luôn</td><td class="num">luôn</td><td>nếu đỉnh \(\gt 1\) thì chia cho đỉnh và nhân 0.95</td></tr>
+</tbody></table></div>
+<p>Với \(\operatorname{RMS}(v) = \sqrt{\max(\tfrac1T\sum v^2,\ 10^{-10})}\), mọi phép cộng noise ở SNR \(\rho\) dB đều dùng
+\( x \leftarrow x + n\cdot \dfrac{\operatorname{RMS}(x)}{\operatorname{RMS}(n)\cdot 10^{\rho/20}} \).</p>
+
+<h4>(ii) Trộn nền thật từ bank train (chỉ S2c, S5c)</h4>
+<p>Mỗi item được bật nền với xác suất \(p_{bg} = 0.8\), rút độc lập. Với crop dài \(T\) mẫu, nền \(b\) được ghép từ các đoạn \(g_1, g_2, \dots\) rút
+ngẫu nhiên đều từ 34,103 đoạn của bank:</p>
+$$ \tilde g_j = g_j \cdot \frac{10^{\gamma_j/20}}{\operatorname{RMS}(g_j) + 10^{-8}},\qquad \gamma_j \sim \mathcal N(0,\ 3^2)\ \text{dB}, $$
+<ul>
+  <li>đoạn đầu bắt đầu ở vị trí ngẫu nhiên trong nửa đầu của nó; đoạn không dài hơn \(2\times 50\) ms bị bỏ qua;</li>
+  <li>nối bằng crossfade tuyến tính 50 ms (\(n_{xf} = 800\) mẫu): \( b[p-n_{xf}+k] \leftarrow b[p-n_{xf}+k](1-r_k) + \tilde g_{j}[k]\,r_k \),
+    \(r_k\) tăng tuyến tính từ 0 tới 1;</li>
+  <li>không lặp một đoạn để kéo dài (mỗi chỗ cần thêm là một lần rút mới), cho tới khi đủ \(T\) mẫu.</li>
+</ul>
+<p>SNR trộn lấy từ một phân phối cố định, không phụ thuộc vào audio:</p>
+$$ \mathrm{SNR} \sim \mathcal U(0,\ 15)\ \text{dB},\qquad
+\tilde x = x + b\cdot \frac{\operatorname{RMS}(x)}{\operatorname{RMS}(b)\cdot 10^{\mathrm{SNR}/20}},\qquad
+\tilde x \leftarrow 0.95\,\frac{\tilde x}{\max|\tilde x|}\ \ \text{nếu}\ \max|\tilde x| \gt 0.95 , $$
+<p>trong đó \(x\) là crop sau augmentation kênh và RMS tính trên cả crop (gồm cả tiếng nói và khoảng lặng). Bank chứa nền của mọi speaker train; code
+không loại nền thuộc cùng speaker với crop. Không có thành phần nhiễu nào khác ở tầng này (tham số <code>ss_rumble = 0</code>, <code>ss_shared = 0</code>,
+<code>ss_snr_uniform = "0,15"</code>, <code>ss_seg_db = 3</code>, <code>ss_pitched_w = 0</code> trong <code>args.json</code>). Xác suất một item có ít nhất một
+nguồn noise cộng (noise của tầng kênh hoặc nền): \(1 - 0.85 \cdot 0.2 = 0.83\).</p>
+
+<figure>
+<svg class="diagram" viewBox="0 0 940 270" role="img" aria-label="Một bước train của S2c và S5c">
+  <defs>
+    <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8a8a94"/></marker>
+  </defs>
+  <rect class="box" x="12" y="20" width="120" height="74" rx="8"/>
+  <text class="t1" x="22" y="46">crop sạch x</text><text class="t2" x="22" y="66">1.5–3 s,</text><text class="t2" x="22" y="82">lưới 0.25 s</text>
+  <path class="arr" style="marker-end:url(#ah2)" d="M132,57 L156,57"/>
+  <rect class="box" x="158" y="20" width="210" height="74" rx="8"/>
+  <text class="t1" x="168" y="46">Augmenter kênh</text><text class="t2" x="168" y="66">reverb .2 · noise .15 · band .1</text><text class="t2" x="168" y="82">EQ .3 · μ-law .05</text>
+  <path class="arr" style="marker-end:url(#ah2)" d="M368,57 L392,57"/>
+  <rect class="key" x="394" y="20" width="210" height="74" rx="8"/>
+  <text class="t1" x="404" y="46">Trộn nền train</text><text class="t2" x="404" y="66">p .8 · nền độc lập mỗi item</text><text class="t2" x="404" y="82">SNR ~ U(0, 15) dB</text>
+  <path class="arr" style="marker-end:url(#ah2)" d="M604,57 L628,57"/>
+  <rect class="box" x="630" y="20" width="130" height="74" rx="8"/>
+  <text class="t1" x="642" y="46">x̃ (crop ồn)</text><text class="t2" x="642" y="66">đầu vào</text><text class="t2" x="642" y="82">của student</text>
+  <path class="arr" style="marker-end:url(#ah2)" d="M760,57 L784,57"/>
+  <rect class="final" x="786" y="20" width="142" height="74" rx="8"/>
+  <text class="t1" x="796" y="46">student f_s</text><text class="t2" x="796" y="66">L_AAM (1,928 lớp)</text><text class="t2" x="796" y="82">6.9M tham số</text>
+  <path class="arr" style="marker-end:url(#ah2)" d="M695,94 L695,160"/>
+  <rect class="key" x="600" y="162" width="250" height="74" rx="8"/>
+  <text class="t1" x="610" y="188">EnsembleTeacher(x̃)</text><text class="t2" x="610" y="208">S5c: λ20 · (1 − cos)</text><text class="t2" x="610" y="224">trên cùng crop đã augment</text>
+  <path class="arr" style="marker-end:url(#ah2)" d="M72,94 L72,160"/>
+  <rect class="side" x="12" y="162" width="250" height="74" rx="8"/>
+  <text class="t1" x="22" y="188">T1(x) — crop sạch</text><text class="t2" x="22" y="208">S2c (và C2, C2full):</text><text class="t2" x="22" y="224">λ20 · (1 − cos)</text>
+  <rect class="side" x="290" y="162" width="280" height="74" rx="8"/>
+  <text class="t1" x="300" y="188">target cả clip t_FF0, t_T1</text><text class="t2" x="300" y="208">λ2 · mean_k (1 − cos(P_k f_s(x̃), t_k))</text><text class="t2" x="300" y="224">≤ 20 s, audio sạch, tính trước</text>
+</svg>
+<figcaption>Hình 2. Một micro-batch khi train S2c / S5c. Nền train được trộn sau cùng. S2c cho teacher T1 thấy crop sạch; S5c cho ensemble teacher thấy đúng
+crop ồn mà student thấy.</figcaption>
+</figure>
+
+<h3 id="s4-6">4.6 Động học huấn luyện (từ log)</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Run</th><th>loss (step 100 → cuối)</th><th>acc batch</th><th>\(\mathcal L_{\text{kd}}\) (1−cos)</th><th>Tốc độ (L4)</th></tr></thead>
+<tbody>
+<tr><td>T1</td><td>2.501 → 0.825</td><td>0.885 → 0.959</td><td>—</td><td>~1.0 s/step</td></tr>
+<tr><td>C2</td><td>8.40 → 3.2–3.5</td><td>0.86 → 0.96</td><td>không ghi nhận</td><td>2.6–3.0 s/step (~4.7 h)</td></tr>
+<tr><td>S2c</td><td>6.885 → 4.142</td><td>0.876 → 0.945</td><td>0.1520 → 0.1297</td><td>1.34 s/step ở cuối run</td></tr>
+<tr class="final"><td>S5c</td><td>3.685 → 1.930</td><td>0.902 → 0.941</td><td>0.0211 → 0.0182</td><td>1.64 s/step</td></tr>
+</tbody></table></div>
+<p class="small">Nguồn: <code>exp/ft/S2c_clean/log.txt</code>, <code>exp/ft/S5c_clean/log.txt</code> (S2c, S5c); T1 và C2 theo log của các run đó. Loss giữa các run
+không so sánh trực tiếp được (khác số hạng). Cột KD là \(\mathcal L_{\text{kd}}\) chưa nhân λ (log ghi riêng số hạng này). \(\mathcal L_{\text{kd}}\) của S5c nhỏ
+ngay từ đầu vì một thành viên của ensemble (S2c) chính là điểm khởi tạo của student; tín hiệu KD kéo student về phía trung bình của S2c và T1 trên
+input ồn. S2c bị gián đoạn một lần và được resume từ <code>resume.pt</code> tại step 4200; lịch LR không đổi (N giữ nguyên 6000), log liền mạch
+(lr 7.13e-6 ở step 4300).</p>
+
+<!-- ===================================================================== 5 -->
+<h2 id="s5">5. Ensemble distillation (S5c)</h2>
+
+<h3>5.1 EnsembleTeacher</h3>
+<p><code>sred.models.EnsembleTeacher</code>, tạo bằng <code>load_model("ens:a.pt,b.pt")</code>. Mọi thành viên phải cùng không gian embedding:</p>
+$$ t(\tilde x) = \operatorname{normalize}\Big(\sum_{m=1}^{M} \operatorname{normalize}\big(f_m(\tilde x)\big)\Big),\qquad \{f_m\} = \{f_{T1},\ f_{S2c}\},\ M = 2 . $$
+<p>T1 = <code>exp/ft/W_T1_B6ft/avg.pt</code> (12,459,296 tham số), S2c = <code>exp/ft/S2c_clean/step6000.pt</code> (6,917,480). Cả hai đóng băng; teacher
+tổng ~19.4M tham số chỉ chạy lúc train và không bao giờ dùng lúc inference. T1 và S2c cùng không gian embedding vì S2c là hậu duệ (qua nén và KD)
+của T1.</p>
+
+<h3>5.2 Teacher thấy crop đã augment (<code>teacher_clean = 0</code>)</h3>
+<ul>
+  <li><b>Ý đồ thiết kế:</b> T1 được fine-tune với augmentation mặc định (không có nền thật), còn S2c được huấn luyện với nền thật ở SNR 0–15 dB. Trung bình
+    hai embedding trên <b>chính input ồn</b> mà student sẽ gặp cho student một target kết hợp hai mô hình có lịch sử huấn luyện khác nhau.</li>
+  <li>Nếu teacher chỉ thấy crop sạch (cách của C2/S2c), mục tiêu là "ánh xạ crop ồn về embedding sạch của T1"; S2c đã học mục tiêu này.</li>
+  <li>Target cả clip {FF0, T1}_split (audio sạch, λ 2) được giữ làm neo để student không trôi khỏi không gian embedding.</li>
+  <li>Phiên bản này không có đánh giá trung gian, nên không đo riêng đóng góp của bước S2c → S5c (§11).</li>
+</ul>
+
+<h3>5.3 Siêu tham số (<code>scripts/pipeline_clean.sh</code>, <code>exp/ft/S5c_clean/args.json</code>)</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Tham số</th><th>S5c</th><th>S2c (để so)</th></tr></thead>
+<tbody>
+<tr><td>init</td><td>S2c step 6000</td><td>C2full step 3000</td></tr>
+<tr><td>teacher / teacher thấy</td><td><code>ens:</code>T1,S2c / cùng crop đã augment</td><td>T1 / crop sạch</td></tr>
+<tr><td>λ<sub>kd</sub> / λ<sub>tgt</sub></td><td>20 / 2</td><td>20 / 2</td></tr>
+<tr><td>KD targets</td><td colspan="2"><code>exp/kd/FF0_split.npz</code>, <code>exp/kd/T1_split.npz</code> (giống nhau)</td></tr>
+<tr><td>steps / lr / warmup / head-only</td><td>2500 / 2e-5 / 100 / 100</td><td>6000 / 3e-5 / 200 / 200</td></tr>
+<tr><td>augmentation</td><td colspan="2">kênh nhẹ (§4.5 i) + nền train p 0.8, SNR U(0, 15) dB (giống nhau)</td></tr>
+<tr><td>danh sách / lớp</td><td colspan="2"><code>train_full_split.txt</code> / 1,928 (giống nhau)</td></tr>
+<tr><td>batch / crop / AMP / BN</td><td colspan="2">32 = 2 × 16 / 1.5–3 s / bf16 / đóng băng (giống nhau)</td></tr>
+<tr><td>khác</td><td colspan="2">seed 0; workers 4; save mỗi 500 step; resume mỗi 100 step; dev evaluation tắt (giống nhau)</td></tr>
+</tbody></table></div>
+
+<h3>5.4 Thời gian</h3>
+<p>S5c chạy liền một mạch 13:13 → 14:34 UTC ngày 02/11/2026 (~1.35 h trên L4): ~12 phút đầu để tính tâm speaker cho head (embedding 9,197 utterance
+cohort, ≤ 5 mỗi lớp, bằng S2c) và nạp teacher, sau đó 2500 step ở 1.64 s/step.</p>
+
+<!-- ===================================================================== 6 -->
+<h2 id="s6">6. Back-end Q3 (QMF có SNR)</h2>
+<p>Cosine giữa hai embedding được ánh xạ thành log-odds bằng logistic regression trên 9 đặc trưng của trial. Clip ngắn hoặc ồn nén dải cosine lại, nên
+một ngưỡng toàn cục trên cosine là chưa tối ưu; Q3 co giãn điểm theo độ dài và độ sạch của hai clip.</p>
+
+<h3>6.1 Đặc trưng chất lượng của từng clip (tính từ audio, không cần model)</h3>
+<ul>
+  <li>Độ dài \(d\) = số mẫu / 16000 (s), trên cả file.</li>
+  <li>SNR ước lượng (<code>sred.quality.snr_est</code>), trên cả file (cohort sạch: 60 s đầu), không VAD:
+$$ e_t = 10\log_{10}\Big(\tfrac{1}{400}\sum_{n=0}^{399} x[160t+n]^2 + 10^{-10}\Big),\qquad q = P_{95}(e) - P_{10}(e)\ \ [\text{dB}] . $$
+    Khung 25 ms, hop 10 ms; tín hiệu ngắn hơn 400 mẫu được pad 0. Với file test, \(d\) làm tròn 3 chữ số và \(q\) làm tròn 2 chữ số (bảng thống kê
+    audio theo file, <code>eda/audio_stats.py</code>).</li>
+</ul>
+
+<h3>6.2 Đặc trưng của trial và công thức chấm</h3>
+<p>Với \(s = \hat e_A^\top \hat e_B\), \(d_{\min}, d_{\max} = \min/\max(d_A, d_B)\),
+\(\text{lo} = \operatorname{clip}(\min(q_A,q_B), -5, 40)/10\), \(\text{hi} = \operatorname{clip}(\max(q_A,q_B), -5, 40)/10\):</p>
+$$ \mathbf x = \big[\,s,\ \log d_{\min},\ \log d_{\max},\ s\log d_{\min},\ s\log d_{\max},\ \text{lo},\ \text{hi},\ s\cdot\text{lo},\ s\cdot\text{hi}\,\big] \in \mathbb R^9 , $$
+$$ \text{score}(A,B) = \sum_{k=1}^{9} w_k\,\frac{x_k - m_k}{\sigma_k} + w_0 . $$
+<p>\(m_k, \sigma_k\) là mean/std của đặc trưng trên các cặp fit. Điểm là log-odds không hiệu chỉnh xác suất (vì <code>class_weight="balanced"</code>), nhưng
+EER/minDCF chỉ cần thứ tự.</p>
+
+<h3 id="s6-3">6.3 Dữ liệu fit: cohort train</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Phần cohort</th><th class="num">Item</th><th>Cách tạo</th></tr></thead>
+<tbody>
+<tr><td>Sạch, cả clip (≤ 60 s)</td><td class="num">7,600</td><td><code>cohort_subset(train.txt − V, 5/speaker, seed 0)</code>: 7,600 utterance của 1,600 speaker (danh sách chính thức)</td></tr>
+<tr><td>Sạch, 1.5 s đầu</td><td class="num">7,600</td><td>cùng utterance, cắt 1.5 s đầu (\(d = \min(d, 1.5)\))</td></tr>
+<tr><td>Ồn, bản A</td><td class="num">7,600</td><td>cả utterance (≤ 20 s) + một đoạn 6 s ngẫu nhiên trong 242 đoạn của <b>nửa train bg_noise</b>, dịch vòng ngẫu nhiên và lặp cho đủ độ dài, SNR \(\mathcal U(-5, 20)\) dB, giới hạn đỉnh 0.95; seed <code>default_rng(7_000_003·i + 0)</code></td></tr>
+<tr><td>Ồn, bản B</td><td class="num">7,600</td><td>crop ngẫu nhiên 1.5–4 s + bg_noise như trên (rút độc lập; seed <code>7_000_003·i + 1</code>)</td></tr>
+<tr class="best"><td>Tổng</td><td class="num">30,400</td><td>mỗi item mang: speaker, ID utterance nguồn, \(d\), \(q\) (bản ồn đo trên audio ồn)</td></tr>
+</tbody></table></div>
+<p>Cohort được embed lại bằng chính S5c (<code>eda/qsets.py coh exp/ft/S5c_clean/step2500.pt</code> → <code>exp/q/S5c_clean_step2500_cohnoisy.npz</code>
+cho hai bản ồn; hai bản sạch lấy từ cache embedding). Q3 vì thế được <b>fit riêng cho S5c</b>.</p>
+
+<h3>6.4 Lấy cặp và fit</h3>
+<ul>
+  <li><b>Non-target:</b> 300,000 cặp chỉ số ngẫu nhiên (seed 0); nhãn theo speaker (một số ít cặp ngẫu nhiên tình cờ cùng speaker thành target).</li>
+  <li><b>Target:</b> mọi cặp cùng speaker trong cửa sổ 20 item liên tiếp theo thứ tự đã sắp theo speaker.</li>
+  <li><b>Loại:</b> cặp một item với chính nó, và cặp hai phiên bản của <b>cùng một utterance nguồn</b>.</li>
+  <li><b>Model:</b> <code>LogisticRegression(C=1.0, class_weight="balanced")</code> (solver lbfgs) trên đặc trưng đã chuẩn hoá z-score.</li>
+  <li><b>Số cặp cho S5c:</b> 534,362 cặp, gồm 234,543 target và 299,819 non-target (log <code>exp/logs/clean_public.log</code>).</li>
+</ul>
+<p><b>Hệ số Q3 của S5c</b> (fit lại cho báo cáo này trên CPU từ embedding cohort đã cache, đúng quy trình của <code>scripts/qeval.py</code>; tất định với seed 0
+và tái tạo đúng từng byte file kết quả private, §6.5):</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Đặc trưng</th><th class="num">mean \(m_k\)</th><th class="num">std \(\sigma_k\)</th><th class="num">hệ số \(w_k\)</th></tr></thead>
+<tbody>
+<tr><td>\(s\)</td><td class="num">0.336874</td><td class="num">0.302777</td><td class="num">4.542190</td></tr>
+<tr><td>\(\log d_{\min}\)</td><td class="num">0.744701</td><td class="num">0.553628</td><td class="num">−0.751874</td></tr>
+<tr><td>\(\log d_{\max}\)</td><td class="num">1.673338</td><td class="num">0.830089</td><td class="num">−0.501010</td></tr>
+<tr><td>\(s \log d_{\min}\)</td><td class="num">0.269386</td><td class="num">0.394617</td><td class="num">0.438572</td></tr>
+<tr><td>\(s \log d_{\max}\)</td><td class="num">0.588931</td><td class="num">0.687700</td><td class="num">0.296585</td></tr>
+<tr><td>lo</td><td class="num">1.325358</td><td class="num">0.680152</td><td class="num">−0.239059</td></tr>
+<tr><td>hi</td><td class="num">2.322843</td><td class="num">0.900695</td><td class="num">−0.466151</td></tr>
+<tr><td>\(s\cdot\)lo</td><td class="num">0.476445</td><td class="num">0.586298</td><td class="num">−0.317918</td></tr>
+<tr><td>\(s\cdot\)hi</td><td class="num">0.789844</td><td class="num">0.847904</td><td class="num">1.113832</td></tr>
+<tr><td>intercept \(w_0\)</td><td class="num"></td><td class="num"></td><td class="num">0.003551</td></tr>
+</tbody></table></div>
+<p><b>Đọc hệ số:</b> trọng số của cosine tăng theo độ dài (\(s\log d \gt 0\): clip dài đáng tin hơn) và theo SNR của phía sạch hơn
+(\(s\cdot\text{hi} \gt 0\)); SNR của phía ồn hơn có tương tác âm nhỏ (\(s\cdot\text{lo} \lt 0\)).</p>
+
+<h3 id="s6-5">6.5 Hai bản hiện thực và kiểm tra tái lập</h3>
+<ul>
+  <li><b>File private:</b> <code>scripts/private_q3.sh</code> → <code>scripts/qeval.py --write Q3</code> → <code>sred.calibrate.QMF</code> (max_iter 2000). Fit lại
+    trên CPU chỉ từ cohort train (30,400 item) rồi chấm 278,410 trial private cho ra file có md5 <code>7ad1be9a8a1787f41ffbeb2353ed85ba</code>,
+    <b>trùng từng byte</b> với file đã tạo.</li>
+  <li><b>Public:</b> <code>exp/public_eval/public_bench.py</code> dùng bản hiện thực lại trong <code>scripts/backend_q5.py</code> (cùng cohort, cùng luật lấy cặp,
+    cùng seed; std cộng \(10^{-6}\), max_iter 3000). Chấm public bằng cả hai bản cho cùng EER 4.389; chênh lệch điểm lớn nhất \(8.2\cdot10^{-4}\),
+    tương quan 0.9999999997 (tính cho báo cáo này).</li>
+</ul>
+
+<h3>6.6 Vì sao không transductive</h3>
+<ul>
+  <li>Tham số \((m, \sigma, w)\) được fit một lần trên dữ liệu train (cohort train sạch + cohort train ồn hoá bằng nửa train của bg_noise), rồi cố định.</li>
+  <li>Mỗi trial chỉ dùng: embedding, độ dài và SNR của <b>đúng hai clip của nó</b>. Không cohort test, không AS-norm/S-norm, không thống kê trên tập trial
+    hay tập file test, không clustering, không TTA.</li>
+  <li>Đặc trưng chất lượng tính từ chính audio, không dùng đường dẫn hay ID speaker.</li>
+</ul>
+
+<!-- ===================================================================== 7 -->
+<h2 id="s7">7. Giao thức đánh giá</h2>
+
+<h3>7.1 EER và minDCF (hàm <code>eer</code>, <code>min_dcf</code> trong <code>exp/public_eval/public_bench.py</code>)</h3>
+<p>Sắp điểm tăng dần \(s_{(1)} \le \dots \le s_{(n)}\), \(y = 1\) là target, \(N_+ / N_-\) là số target / non-target. Với ngưỡng đặt sau phần tử thứ \(k\):</p>
+$$ \mathrm{FRR}_k = \frac{1}{N_+}\sum_{j \le k} y_{(j)},\qquad \mathrm{FAR}_k = 1 - \frac{1}{N_-}\sum_{j\le k}\big(1-y_{(j)}\big),\qquad
+k^* = \arg\min_k |\mathrm{FRR}_k - \mathrm{FAR}_k|,\qquad \mathrm{EER} = 100\cdot\frac{\mathrm{FRR}_{k^*} + \mathrm{FAR}_{k^*}}{2} . $$
+$$ \mathrm{minDCF}(P_{\text{tar}}) = \min_k \frac{P_{\text{tar}}\,\mathrm{FRR}_k + (1-P_{\text{tar}})\,\mathrm{FAR}_k}{\min(P_{\text{tar}},\ 1-P_{\text{tar}})},\qquad P_{\text{tar}} = 0.01,\ C_{\text{miss}} = C_{\text{fa}} = 1 . $$
+<p class="small">EER tính bằng nội suy ROC của scikit-learn cho cùng kết quả (4.388 so với 4.389, khóa <code>all_eer_sklearn_interp</code>).</p>
+
+<h3>7.2 Public test là đánh giá cuối</h3>
+<ul>
+  <li>Toàn bộ công thức S2c → S5c → Q3 được cố định trước; không có lựa chọn nào phụ thuộc vào kết quả đánh giá.</li>
+  <li>Public test (49,993 trial gốc) được embed và chấm một lần sau khi S5c train xong; nhãn public chỉ dùng để tính metric.</li>
+  <li>Báo cáo: EER và minDCF trên tất cả trial và trên danh sách cleaned (§2.6), cosine thô (không back-end), EER theo độ dài của phía ngắn hơn.</li>
+</ul>
+
+<h3>7.3 Paired bootstrap theo cụm speaker</h3>
+<p>Đơn vị lấy mẫu lại là thư mục speaker của <code>file_a</code> (464 cụm trên public all). Mỗi lần lấy mẫu có hoàn lại 464 cụm; mỗi trial nhận trọng số bằng
+số lần cụm của nó được chọn; tính EER có trọng số cho hai hệ thống A, B trên cùng mẫu. n = 1000, seed 0. P(B tốt hơn) = tỉ lệ lần EER(B) &lt; EER(A);
+CI 95 % = phân vị 2.5 / 97.5 của Δ = EER(B) − EER(A). Tính cho báo cáo này từ các file điểm trong <code>exp/public_eval/</code>.</p>
+
+<!-- ===================================================================== 8 -->
+<h2 id="s8">8. Kết quả</h2>
+
+<h3 id="s8-1">8.1 Public test</h3>
+<p><b>Điều kiện:</b> public test gốc (49,993 trial). Q3 fit chỉ trên cohort train; mỗi trial chấm chỉ từ hai clip của chính nó.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Hệ thống</th><th class="num">All EER</th><th class="num">All minDCF</th><th class="num">Cleaned EER</th><th class="num">Cleaned minDCF</th><th class="num">cos all</th><th class="num">cos cleaned</th><th class="num">cos minDCF</th></tr></thead>
+<tbody>
+<tr class="final"><td>S5c + Q3</td><td class="num">4.389</td><td class="num">0.2689</td><td class="num">2.681</td><td class="num">0.2174</td><td class="num">4.601</td><td class="num">2.806</td><td class="num">0.2685</td></tr>
+<tr><td>C2 + Q3 (lần nộp trước)</td><td class="num">4.409</td><td class="num">0.2875</td><td class="num">2.714</td><td class="num">0.2364</td><td class="num">4.761</td><td class="num">3.067</td><td class="num">0.2853</td></tr>
+</tbody></table></div>
+<p class="small">Nguồn: <code>exp/public_eval/metrics.json</code>; file điểm <code>exp/public_eval/S5c_clean_Q3.txt</code> (md5 <code>56a5db88cbd26f580178a951966b66d9</code>),
+<code>S5c_clean_cos.txt</code> (<code>db76a6f1f5441dca51cc813de2f3d068</code>), <code>C2_Q3.txt</code> (<code>98702b660915a6e2f626abd35bcefd76</code>).</p>
+
+<h3 id="s8-2">8.2 Bootstrap theo cụm speaker (n 1000)</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>A → B</th><th>Tập</th><th class="num">EER A</th><th class="num">EER B</th><th class="num">Δ</th><th class="num">P(B tốt hơn)</th><th>CI 95 % của Δ</th></tr></thead>
+<tbody>
+<tr class="best"><td>C2 + Q3 → S5c + Q3</td><td>all</td><td class="num">4.409</td><td class="num">4.389</td><td class="num">−0.020</td><td class="num">0.667</td><td>[−0.144, +0.113]</td></tr>
+<tr><td>C2 + Q3 → S5c + Q3</td><td>cleaned</td><td class="num">2.714</td><td class="num">2.681</td><td class="num">−0.033</td><td class="num">0.622</td><td>[−0.212, +0.163]</td></tr>
+<tr><td>S5c cosine → S5c + Q3</td><td>all</td><td class="num">4.601</td><td class="num">4.389</td><td class="num">−0.212</td><td class="num">0.749</td><td>[−0.572, +0.279]</td></tr>
+<tr><td>C2 cosine → S5c cosine</td><td>all</td><td class="num">4.761</td><td class="num">4.601</td><td class="num">−0.160</td><td class="num">0.977</td><td>[−0.308, −0.010]</td></tr>
+</tbody></table></div>
+
+<h3 id="s8-3">8.3 EER theo độ dài phía ngắn hơn</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Độ dài phía ngắn hơn</th><th class="num">Trial (target)</th><th class="num">S5c + Q3</th><th class="num">C2 + Q3</th><th class="num">S5c cos</th><th class="num">C2 cos</th></tr></thead>
+<tbody>
+<tr><td>&lt; 2 s</td><td class="num">8,994 (4,396)</td><td class="num">8.78</td><td class="num">9.01</td><td class="num">8.67</td><td class="num">8.85</td></tr>
+<tr><td>2–4 s</td><td class="num">21,464 (10,799)</td><td class="num">4.20</td><td class="num">4.12</td><td class="num">4.11</td><td class="num">4.26</td></tr>
+<tr><td>4–8 s</td><td class="num">14,321 (6,950)</td><td class="num">3.01</td><td class="num">3.05</td><td class="num">2.92</td><td class="num">2.89</td></tr>
+<tr><td>≥ 8 s</td><td class="num">5,214 (2,855)</td><td class="num">1.31</td><td class="num">1.31</td><td class="num">1.32</td><td class="num">1.31</td></tr>
+</tbody></table></div>
+<p><b>Đọc kết quả:</b></p>
+<ul>
+  <li>S5c + Q3 tốt hơn C2 + Q3 ở EER all, EER cleaned, minDCF all và minDCF cleaned, nhưng mức lợi EER nhỏ và chưa có ý nghĩa
+    (Δ −0.020, P 0.67; CI chứa 0 ở cả hai phía). Không thể kết luận S5c tốt hơn C2 về EER trên public.</li>
+  <li><b>minDCF</b> cải thiện rõ hơn EER: 0.2875 → 0.2689 (−6.5 %) ở all, 0.2364 → 0.2174 (−8.0 %) ở cleaned.</li>
+  <li><b>Embedding thô</b> của S5c tốt hơn C2 có ý nghĩa: cosine 4.761 → 4.601 (P 0.977, CI [−0.31, −0.01]); phần cải thiện tập trung ở clip ngắn
+    (&lt; 2 s: 8.85 → 8.67; 2–4 s: 4.26 → 4.11).</li>
+  <li><b>Q3 so với cosine</b> trên S5c: −0.21 EER all (4.601 → 4.389), −0.13 cleaned; minDCF gần như không đổi (0.2685 → 0.2689). Trong một bin độ dài hẹp, Q3 có
+    thể xấu hơn cosine một chút (&lt; 2 s: 8.78 so với 8.67; 2–4 s: 4.20 so với 4.11) vì số hạng SNR đổi thứ tự trial trong bin; Q3 vẫn hạ EER gộp vì nó căn
+    ngưỡng giữa các điều kiện độ dài và SNR.</li>
+  <li>Lỗi tập trung ở clip ngắn: phía ngắn hơn &lt; 2 s có EER ~8.8, gấp đôi bin 2–4 s và gần 7 lần bin ≥ 8 s.</li>
+</ul>
+
+<h3 id="s8-4">8.4 Kiểm tra file private</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Kiểm tra</th><th>Kết quả</th></tr></thead>
+<tbody>
+<tr><td>File</td><td><code>exp/private_cand/S5c_clean_Q3/results.txt</code>, chép sang <code>releases/version_021126_S5cQ3/private/results.txt</code> (tạo 02/11/2026 16:32 UTC bằng <code>scripts/private_q3.sh S5c_clean exp/ft/S5c_clean/step2500.pt</code>)</td></tr>
+<tr><td>Số dòng</td><td>278,410 (đúng bằng <code>private-test.txt</code>)</td></tr>
+<tr><td>Thứ tự (file_a, file_b) so với <code>private-test.txt</code></td><td>0 lệch</td></tr>
+<tr><td>Dòng sai định dạng (≠ 3 trường hoặc điểm không phải số)</td><td>0</td></tr>
+<tr><td>Định dạng</td><td><code>fileA fileB score</code>, điểm 6 chữ số thập phân</td></tr>
+<tr><td>md5 <code>results.txt</code></td><td><code>7ad1be9a8a1787f41ffbeb2353ed85ba</code></td></tr>
+<tr><td>File nộp <code>sred_S5cQ3_private_021126.zip</code></td><td>chứa đúng một file <code>results.txt</code> (12,087,317 byte; md5 bên trong khớp ở trên); md5 zip <code>d8b95b42a23d6dcc4f0777abcecf56f3</code></td></tr>
+<tr><td>Embedding</td><td>37,354 file, cả file (≤ 60 s), 192-d; 1 h 43 phút trên L4 (chạy song song với các job đánh giá khác)</td></tr>
+<tr><td>Tái lập Q3</td><td>fit lại Q3 trên CPU chỉ từ cohort train rồi chấm lại cho đúng md5 trên (§6.5)</td></tr>
+</tbody></table></div>
+
+<!-- ===================================================================== 9 -->
+<h2 id="s9">9. Tính hợp lệ</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Luật BTC</th><th>Cách tuân thủ ở S5c + Q3</th><th>Trạng thái</th></tr></thead>
+<tbody>
+<tr><td>&lt; 7M tham số tại inference, gồm head và back-end</td><td>một mạng 6,917,480 tham số (đếm lại trên <code>step2500.pt</code>) + Q3 28 hằng số; head AAM, phép chiếu KD, T1 và ensemble teacher không có ở inference</td><td>✓</td></tr>
+<tr><td>Chỉ dữ liệu speech BTC</td><td>chỉ train Vi-SRED26 (<code>train_full_split</code> là tập con được gán lại nhãn của train); không dữ liệu ngoài</td><td>✓</td></tr>
+<tr><td>bg_noise chỉ làm noise</td><td>nửa train của bg_noise chỉ được cộng vào cohort train khi fit Q3; huấn luyện mạng không dùng bg_noise (nền lấy từ chính bản ghi train)</td><td>✓</td></tr>
+<tr><td>Pretrained trong danh sách BTC</td><td>ReDimNet2-B6 <code>b6-vb2+vox2+cnc2_v0-lm</code> (teacher, rồi nén); ReDimNet-M <code>M-vb2+vox2+cnc-ft_mix</code> (FF0, chỉ để tính KD target)</td><td>✓ (xem mục mở 1–2)</td></tr>
+<tr><td>Model &gt; 7M chỉ làm teacher</td><td>T1 (12.46M) và EnsembleTeacher (T1 + S2c) chỉ chạy lúc train; không nộp fusion điểm</td><td>✓</td></tr>
+<tr><td>Không transductive scoring</td><td>mỗi trial = hai clip của nó + tham số cố định fit trên train; không score normalisation, không AS-norm, không cohort test, không query expansion, không clustering, không TTA</td><td>✓</td></tr>
+<tr><td>Không dùng thông tin test khi train / fit</td><td>S2c, S5c, KD target, bank nền và cohort Q3 đều chỉ từ train; SNR trộn nền là \(\mathcal U(0, 15)\) dB cố định; private chỉ inference; đường dẫn private chứa ID thư mục nhưng không được dùng</td><td>✓</td></tr>
+<tr><td>Nhãn public chỉ để đánh giá</td><td>public chỉ chấm một lần làm đánh giá cuối của S5c + Q3 (§7.2); không dùng để chọn checkpoint hay tham số của S2c, S5c, Q3</td><td>✓</td></tr>
+</tbody></table></div>
+
+<div class="warn"><b>Các mục còn mở (cần nêu trong technical report):</b>
+<ol>
+  <li><b>Nguồn gốc checkpoint B6 chưa xác minh sha256.</b> Bản local là pack GGUF fp16 của OpenASR (<code>pretrained/OpenASR__redimnet2-b6-cn/redimnet2-b6-cn-fp16.oasr</code>,
+    12.46M tham số), chuyển sang torch. Bản BTC duyệt là <code>b6-vb2+vox2+cnc2_v0-lm.pt</code> của PalabraAI (sha256 <code>287365f6…9868</code>). Shape các tensor
+    khớp, nhưng trọng số chưa được so với file chính thức (máy này bị chặn GitHub release). Ảnh hưởng toàn bộ dòng T1 → C2 → S5c. Việc cần làm: tải file chính
+    thức, so từng tensor (sai lệch ≤ fp16).</li>
+  <li><b>B6 được ghi "teacher only"</b> trong danh sách BTC (vì &gt; 7M). Hệ thống dùng B6 (qua T1) làm teacher và dùng phiên bản <b>nén xuống &lt; 7M</b> của T1 làm
+    khởi tạo student. Nên trình bày rõ cách làm này trong báo cáo và, nếu cần, xác nhận với BTC.</li>
+</ol></div>
+
+<!-- ===================================================================== 10 -->
+<h2 id="s10">10. Tái lập</h2>
+
+<h3>10.1 Phần cứng và phần mềm</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Hạng mục</th><th>Giá trị</th></tr></thead>
+<tbody>
+<tr><td>GPU</td><td>1 × NVIDIA L4, 23,034 MiB (~24 GB)</td></tr>
+<tr><td>CPU / RAM</td><td>8 vCPU / 31 GB</td></tr>
+<tr><td>Python / PyTorch / torchaudio</td><td>3.12.9 / 2.5.1+cu124 / 2.5.1+cu124</td></tr>
+<tr><td>scikit-learn / numpy</td><td>1.9.1 / 2.1.3</td></tr>
+<tr><td>Mã nguồn mạng</td><td>PalabraAI ReDimNet2 (<code>.cache/torch/hub/PalabraAI_redimnet2_main</code>), IDRnD ReDimNet v1 (cho FF0)</td></tr>
+<tr><td>An toàn RAM</td><td>một job GPU + tối đa một job CPU nhẹ; <code>scripts/memguard.sh</code>; bank nền đọc memmap; DataLoader ≤ 4 worker; job chạy qua <code>scripts/detach.sh</code> (tmux); sau pod restart chạy <code>scripts/resume_all.sh</code></td></tr>
+</tbody></table></div>
+
+<h3>10.2 Lệnh theo thứ tự</h3>
+<p>Chạy trong <code>/home/jovyan/code/VLSP-2026/SRED</code>, sau <code>source env.sh</code>, Python <code>.venv/bin/python</code>. Các bước 2–7 tạo các checkpoint
+đầu chuỗi (đã có sẵn trong repo, md5 ở §10.4).</p>
+<pre><code># 0. môi trường và bảo vệ RAM
+cd /home/jovyan/code/VLSP-2026/SRED &amp;&amp; source env.sh
+scripts/detach.sh memguard "scripts/memguard.sh"
+
+# 1. danh sách dữ liệu (lists/train_drop_bad.txt có sẵn; lệnh tạo: không ghi nhận)
+python eda/make_full_split_list.py            # -&gt; lists/train_full_split.txt (57,837 utt, 1,928 lớp)
+python eda/prep_bg_noise.py                   # bg_noise: chia train/eval -&gt; exp/noise/bg_train.npy
+
+# 2. FF0 (ReDimNet-M)
+python -m sred.train --base redimnet_M_mix --bs 32 --steps 3000 --lr 2e-5 --head-lr 2e-3 --warmup 200 \
+  --head-only-steps 200 --crop-sec 3.0 --min-crop-sec 1.5 --aug 1.0 --freeze-bn --amp bf16 --dev-trials 0 \
+  --eval-every 3000 --save-every 500 --exclude-val --train-list lists/train_drop_bad.txt --resume --workers 4 --name FF0_full
+python scripts/wise_interp.py exp/ft/FF0_full/step2000.pt exp/ft/W_FF0_full/avg.pt --alpha 0.5
+
+# 3. T1 (B6 fine-tune)
+python -m sred.train --base redimnet2_b6_mix_teacher --bs 32 --accum 2 --steps 3000 --lr 2e-5 --head-lr 2e-3 \
+  --warmup 200 --head-only-steps 200 --eval-every 3000 --save-every 1000 --aug 1.0 --freeze-bn --crop-sec 3.0 \
+  --min-crop-sec 1.5 --amp bf16 --dev-trials 0 --seed 0 --resume --workers 6 --exclude-val \
+  --train-list lists/train_drop_bad.txt --name T1_B6ft
+python scripts/wise_interp.py exp/ft/T1_B6ft/step2000.pt exp/ft/W_T1_B6ft/avg.pt --alpha 0.5
+
+# 4. KD targets cả clip (≤ 20 s, sạch): train − V, rồi +V, rồi +43 ID tách
+python scripts/kd_targets.py exp/ft/W_FF0_full/avg.pt exp/kd/FF0.npz --train-list lists/train_drop_bad.txt
+python scripts/kd_targets.py exp/ft/W_T1_B6ft/avg.pt  exp/kd/T1.npz  --train-list lists/train_drop_bad.txt
+python scripts/kd_targets.py exp/ft/W_FF0_full/avg.pt exp/kd/FF0_full.npz --train-list lists/train_drop_bad.txt --keep-val --extend exp/kd/FF0.npz
+python scripts/kd_targets.py exp/ft/W_T1_B6ft/avg.pt  exp/kd/T1_full.npz  --train-list lists/train_drop_bad.txt --keep-val --extend exp/kd/T1.npz
+python scripts/kd_targets.py exp/ft/W_FF0_full/avg.pt exp/kd/FF0_split.npz --train-list lists/train_full_split.txt --keep-val --extend exp/kd/FF0_full.npz
+python scripts/kd_targets.py exp/ft/W_T1_B6ft/avg.pt  exp/kd/T1_split.npz  --train-list lists/train_full_split.txt --keep-val --extend exp/kd/T1_full.npz
+
+# 5. Nén T1 -&gt; exp/b6c/t1/init.pt (6,917,480 tham số, fidelity 0.9017)
+python -m sred.compress --teacher exp/ft/W_T1_B6ft/avg.pt --tag t1
+
+# 6. C2
+python -m sred.train --base b6c_t1 --teacher exp/ft/W_T1_B6ft/avg.pt --kd 20 --teacher-clean 1 \
+  --kd-targets exp/kd/FF0.npz,exp/kd/T1.npz --kd-w 2 \
+  --bs 32 --accum 2 --crop-sec 3.0 --min-crop-sec 1.5 --amp bf16 --steps 6000 --lr 5e-5 --head-lr 2e-3 --warmup 200 \
+  --head-only-steps 200 --dev-trials 0 --eval-every 6000 --save-every 2000 --aug 1.0 --freeze-bn --seed 0 --resume \
+  --workers 6 --exclude-val --train-list lists/train_drop_bad.txt --name C2_b6c_t1_kd
+
+# 7. C2full (+V)
+python -m sred.train --base exp/ft/C2_b6c_t1_kd/step6000.pt --teacher exp/ft/W_T1_B6ft/avg.pt --kd 20 --teacher-clean 1 \
+  --kd-targets exp/kd/FF0_full.npz,exp/kd/T1_full.npz --kd-w 2 --bs 32 --accum 2 --crop-sec 3.0 --min-crop-sec 1.5 \
+  --amp bf16 --steps 3000 --lr 3e-5 --head-lr 2e-3 --warmup 100 --head-only-steps 200 --dev-trials 0 --eval-every 3000 \
+  --save-every 1500 --aug 1.0 --freeze-bn --seed 0 --resume --workers 4 --train-list lists/train_drop_bad.txt --name C2full
+
+# 8. Bank nền yên lặng từ train
+python eda/build_trainbg_bank.py               # -&gt; exp/noise/trainbg.raw + trainbg_index.csv (300 phút)
+
+# 9. S2c rồi S5c, sau đó cohort ồn cho Q3 và các job đánh giá (public, private) chạy song song.
+#    Tham số đầy đủ của hai run: exp/ft/S2c_clean/args.json, exp/ft/S5c_clean/args.json
+bash scripts/pipeline_clean.sh
+
+# 10. Q3: SNR của cohort (một lần, không phụ thuộc model) + cohort ồn hoá bằng nửa train bg_noise, embed bằng S5c
+python eda/qsets.py snr
+python eda/qsets.py coh exp/ft/S5c_clean/step2500.pt
+
+# 11. File private: embed 37,354 file -&gt; Q3 278,410 trial -&gt; kiểm số dòng, thứ tự, định dạng, md5
+bash scripts/private_q3.sh S5c_clean exp/ft/S5c_clean/step2500.pt
+md5sum exp/private_cand/S5c_clean_Q3/results.txt   # 7ad1be9a8a1787f41ffbeb2353ed85ba
+
+# 12. Public test (đánh giá cuối)
+python exp/public_eval/public_bench.py embed S5c_clean=exp/ft/S5c_clean/step2500.pt
+python exp/public_eval/public_bench.py score S5c_clean=exp/ft/S5c_clean/step2500.pt
+python exp/public_eval/public_bench.py report S5c_clean C2</code></pre>
+<p class="small">Bước 10–12 cũng được <code>scripts/pipeline_clean.sh</code> tự gọi sau khi train xong; có thể chạy riêng như trên. Huấn luyện không tái lập
+bit-by-bit (kernel cuDNN không tất định, DataLoader nhiều worker, resume đặt lại seed theo step). Trọng số được báo cáo là trọng số đã đánh giá; phần
+back-end và file nộp thì tất định khi đã có embedding (§6.5).</p>
+
+<h3>10.3 Thời gian trên L4</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Bước</th><th>Thời gian</th></tr></thead>
+<tbody>
+<tr><td>T1 (3000 step)</td><td>~1.0 s/step (~50 phút)</td></tr>
+<tr><td>C2 (6000 step)</td><td>2.6–3.0 s/step, ~4.7 h</td></tr>
+<tr><td>C2full (3000 step)</td><td>2.79 s/step ở cuối log; tổng: không ghi nhận</td></tr>
+<tr><td>S2c (6000 step)</td><td>tốc độ ổn định 1.34 s/step (≈ 2.2–2.3 h nếu chạy liền); thời gian thực ~09:31 → 13:13 UTC ngày 02/11 (~3.7 h), gồm một lần gián đoạn ~17 phút (resume tại step 4200) và các đoạn chạy chậm 2–3 s/step</td></tr>
+<tr><td>S5c (2500 step)</td><td>1.64 s/step; 13:13 → 14:34 UTC (~1.35 h, gồm ~12 phút khởi tạo head)</td></tr>
+<tr><td>Cohort ồn cho Q3 (15,200 item)</td><td>~15 phút (14:34 → 14:49)</td></tr>
+<tr><td>Embed private (37,354 file)</td><td>1 h 43 phút (chạy song song với các job đánh giá khác, nên chậm hơn khi GPU rảnh)</td></tr>
+<tr><td>Fit Q3 + chấm 278,410 trial</td><td>vài phút trên CPU</td></tr>
+</tbody></table></div>
+
+<h3>10.4 File và md5</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>md5</th></tr></thead>
+<tbody>
+<tr class="final"><td><code>exp/ft/S5c_clean/step2500.pt</code> (hệ thống cuối)</td><td><code>3760d82c6a84bd25d0d4e14a97a4caf7</code></td></tr>
+<tr><td><code>releases/version_021126_S5cQ3/private/sred_S5cQ3_private_021126.zip</code> (file nộp)</td><td><code>d8b95b42a23d6dcc4f0777abcecf56f3</code></td></tr>
+<tr><td><code>releases/version_021126_S5cQ3/private/results.txt</code> = <code>exp/private_cand/S5c_clean_Q3/results.txt</code></td><td><code>7ad1be9a8a1787f41ffbeb2353ed85ba</code></td></tr>
+<tr><td><code>exp/public_eval/S5c_clean_Q3.txt</code> / <code>S5c_clean_cos.txt</code></td><td><code>56a5db88cbd26f580178a951966b66d9</code> / <code>db76a6f1f5441dca51cc813de2f3d068</code></td></tr>
+<tr><td><code>exp/ft/S2c_clean/step6000.pt</code> (thành viên ensemble teacher)</td><td><code>5b486b04fb103ee5ec4517fd4975c957</code></td></tr>
+<tr><td><code>exp/ft/C2full/step3000.pt</code></td><td><code>42493796c8c1eb6b7e466babd26b8120</code></td></tr>
+<tr><td><code>exp/ft/C2_b6c_t1_kd/step6000.pt</code> (C2)</td><td><code>f12bffcb9600fb49612b29b842cca745</code></td></tr>
+<tr><td><code>exp/b6c/t1/init.pt</code></td><td><code>1841c86b89b19660275c2638c3e0f813</code></td></tr>
+<tr><td><code>exp/ft/W_T1_B6ft/avg.pt</code> (T1)</td><td><code>cea70fbbe16cc03d201184011745810a</code></td></tr>
+<tr><td><code>exp/ft/W_FF0_full/avg.pt</code> (FF0)</td><td><code>e609c9d20a55a1be99295ffa41da24ba</code></td></tr>
+<tr><td><code>pretrained/OpenASR__redimnet2-b6-cn/redimnet2-b6-cn-fp16.oasr</code></td><td><code>d0bbe9d816146287118476a0c6c0b2db</code></td></tr>
+<tr><td><code>exp/kd/FF0_split.npz</code> / <code>exp/kd/T1_split.npz</code></td><td><code>ee7e70fd1eaf2921fddcccfe1282de99</code> / <code>520180405aa1bb2f5b8e2c5364009032</code></td></tr>
+<tr><td><code>exp/noise/trainbg.raw</code> / <code>trainbg_index.csv</code></td><td><code>537c3b3bb967a69c8888d175dc10e9a7</code> / <code>a1fc8c48344a7b2ba4fa2cff1b1a9755</code></td></tr>
+<tr><td><code>exp/noise/bg_train.npy</code> (nửa train bg_noise)</td><td><code>28311a9b48252b38831593f697484553</code></td></tr>
+<tr><td><code>exp/q/S5c_clean_step2500_cohnoisy.npz</code> (cohort ồn của Q3)</td><td><code>80aeb931194ee4c51575b0d5d293211d</code></td></tr>
+<tr><td><code>lists/train_full_split.txt</code> / <code>lists/train_drop_bad.txt</code></td><td><code>7fe342813f4a06f4bbd6b193147f25fa</code> / <code>7524ddc5c8ec5700a28a8b6bcef0e57b</code></td></tr>
+</tbody></table></div>
+
+<h3>10.5 Luồng inference</h3>
+<figure>
+<svg class="diagram" viewBox="0 0 940 300" role="img" aria-label="Luồng inference của S5c cộng Q3">
+  <defs>
+    <marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8a8a94"/></marker>
+  </defs>
+  <rect class="box" x="10" y="30" width="110" height="52" rx="8"/><text class="t1" x="22" y="54">clip A</text><text class="t2" x="22" y="72">WAV 16 kHz</text>
+  <rect class="box" x="10" y="200" width="110" height="52" rx="8"/><text class="t1" x="22" y="224">clip B</text><text class="t2" x="22" y="242">WAV 16 kHz</text>
+  <path class="arr" style="marker-end:url(#ah3)" d="M120,56 C140,56 140,120 158,120"/>
+  <path class="arr" style="marker-end:url(#ah3)" d="M120,226 C140,226 140,160 158,160"/>
+  <rect class="box" x="160" y="96" width="165" height="88" rx="8"/>
+  <text class="t1" x="172" y="120">Tiền xử lý</text>
+  <text class="t2" x="172" y="140">mono (trung bình kênh)</text>
+  <text class="t2" x="172" y="157">cắt ≤ 60 s đầu</text>
+  <text class="t2" x="172" y="174">lặp tới ≥ 0.5 s</text>
+  <path class="arr" style="marker-end:url(#ah3)" d="M325,140 L353,140"/>
+  <rect class="final" x="355" y="78" width="215" height="124" rx="8"/>
+  <text class="t1" x="367" y="102">S5c · 6,917,480 tham số</text>
+  <text class="t2" x="367" y="122">log-mel 72 (25/10 ms)</text>
+  <text class="t2" x="367" y="139">ReDimNet2-B6, 14 LowRank</text>
+  <text class="t2" x="367" y="156">ASTP → BN → Linear 192</text>
+  <text class="t2" x="367" y="173">L2-norm → ê (fp32, batch 1)</text>
+  <text class="t2" x="367" y="190">mỗi file embed một lần</text>
+  <path class="arr" style="marker-end:url(#ah3)" d="M570,140 L598,140"/>
+  <rect class="box" x="600" y="110" width="110" height="60" rx="8"/>
+  <text class="t1" x="612" y="134">cosine</text><text class="t2" x="612" y="154">s = ê_Aᵀ ê_B</text>
+  <path class="arr" style="marker-end:url(#ah3)" d="M242,184 L242,236 L353,236"/>
+  <rect class="box" x="355" y="216" width="355" height="52" rx="8"/>
+  <text class="t1" x="367" y="238">chất lượng từng file (từ audio)</text>
+  <text class="t2" x="367" y="256">d = độ dài (s) · q = snr_est = P95 − P10 (dB)</text>
+  <path class="arr" style="marker-end:url(#ah3)" d="M710,140 L738,140"/>
+  <path class="arr" style="marker-end:url(#ah3)" d="M710,242 C730,242 730,190 738,190"/>
+  <rect class="key" x="740" y="96" width="120" height="124" rx="8"/>
+  <text class="t1" x="752" y="120">Q3</text>
+  <text class="t2" x="752" y="140">x ∈ R⁹</text>
+  <text class="t2" x="752" y="157">(x − m)/σ</text>
+  <text class="t2" x="752" y="174">wᵀ· + w₀</text>
+  <text class="t2" x="752" y="191">tham số cố định</text>
+  <path class="arr" style="marker-end:url(#ah3)" d="M860,158 L880,158"/>
+  <rect class="box" x="882" y="132" width="52" height="52" rx="8"/>
+  <text class="t1" x="888" y="163">score</text>
+</svg>
+<figcaption>Hình 3. Inference: mỗi file được embed độc lập đúng một lần (một forward trên cả file, không cắt đoạn, không TTA); mỗi trial được chấm chỉ từ hai
+file của nó và tham số Q3 cố định (fit trên train). Định dạng nộp: <code>fileA fileB score</code>, 6 chữ số thập phân, đúng thứ tự <code>private-test.txt</code>.</figcaption>
+</figure>
+
+<h3>10.6 Gói inference</h3>
+<p>Gói inference độc lập để tái lập file nộp nằm ở branch <code>minh-s5c-clean-final</code>; chạy lại end-to-end từ audio trên NVIDIA L4 cho <code>results.txt</code> giống từng byte (md5 <code>7ad1be9a8a1787f41ffbeb2353ed85ba</code>). Gói theo cùng cấu trúc với
+gói inference trước của đội: <code>infer.py</code> (danh sách trial + audio → <code>results.txt</code>), trọng số S5c, hệ số Q3 cố định, smoke test và công cụ so
+file kết quả với file tham chiếu; không chứa code train hay dữ liệu.</p>
+
+<!-- ===================================================================== 11 -->
+<h2 id="s11">11. Hạn chế và hướng phát triển</h2>
+
+<h3>11.1 Hạn chế</h3>
+<ul>
+  <li><b>Mức lợi trên public nhỏ:</b> so với C2 + Q3, EER all chỉ giảm 0.020 (P 0.67, CI [−0.14, +0.11]). Lợi ích rõ nhất nằm ở minDCF và ở cosine thô.</li>
+  <li><b>Không tách được đóng góp từng bước:</b> công thức cố định và chỉ đánh giá ở cuối, nên S2c riêng chưa được chấm public; không có số đo cho riêng việc trộn nền
+    hay riêng ensemble distillation.</li>
+  <li><b>Clip ngắn</b> vẫn là nguồn lỗi chính: phía ngắn hơn &lt; 2 s có EER ~8.8.</li>
+  <li><b>Cohort Q3 là speaker đã thấy khi train:</b> S5c được train trên toàn bộ train (gồm cả 1,600 speaker của cohort), nên phân phối điểm trên cohort có thể lạc
+    quan hơn trên speaker mới; Q3 được fit trên phân phối đó.</li>
+  <li><b>Đa dạng teacher thấp:</b> T1 và S2c cùng họ B6 (S2c là hậu duệ nén của T1).</li>
+  <li><b>Nguồn gốc B6</b> chưa đối chiếu sha256 (§9).</li>
+  <li><b>Điểm private</b> của S5c + Q3 chưa có tại thời điểm viết.</li>
+</ul>
+
+<h3>11.2 Hướng phát triển</h3>
+<ul>
+  <li>Thêm thành viên ensemble khác kiến trúc (pretrained trong danh sách BTC) để tăng đa dạng teacher; distill dài hơn trên ensemble đó.</li>
+  <li>Huấn luyện nhắm vào clip ngắn (crop ngắn hơn, KD từ view dài sang view ngắn).</li>
+  <li>Đánh giá trung gian có đăng ký trước trên tập validation dựng từ train để đo đóng góp của từng thành phần.</li>
+  <li>Đối chiếu trọng số B6 local với file chính thức của PalabraAI.</li>
+</ul>
+
+<!-- ===================================================================== 12 -->
+<h2 id="s12">12. Phụ lục: thuật ngữ và nguồn</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Tên</th><th>Nghĩa</th></tr></thead>
+<tbody>
+<tr><td>B6</td><td>ReDimNet2-B6 <code>b6-vb2+vox2+cnc2_v0-lm</code>, 12,459,296 tham số</td></tr>
+<tr><td>T1</td><td>B6 fine-tune 3000 step, step 2000 + WiSE 0.5 (<code>exp/ft/W_T1_B6ft/avg.pt</code>); teacher</td></tr>
+<tr><td>FF0</td><td>ReDimNet-M fine-tune, step 2000 + WiSE 0.5 (<code>exp/ft/W_FF0_full/avg.pt</code>); chỉ để tính KD target</td></tr>
+<tr><td>b6c_t1</td><td>T1 nén low-rank, chưa train (<code>exp/b6c/t1/init.pt</code>)</td></tr>
+<tr><td>C2</td><td>b6c_t1 + KD 6000 step; đã nộp với Q3 (private leaderboard 5.6004)</td></tr>
+<tr><td>C2full</td><td>C2 + 3000 step cùng công thức, train gồm cả 300 speaker V</td></tr>
+<tr><td>S2c</td><td>C2full + 6000 step trên <code>train_full_split</code>, nền train p 0.8, SNR U(0, 15) dB, KD T1 (<code>exp/ft/S2c_clean/step6000.pt</code>)</td></tr>
+<tr><td>S5c</td><td>S2c + 2500 step distill từ <code>ens:T1,S2c</code> trên crop đã augment (<code>exp/ft/S5c_clean/step2500.pt</code>); hệ thống cuối</td></tr>
+<tr><td>Q3</td><td>QMF 9 đặc trưng (cosine, độ dài, SNR), logistic regression fit trên cohort train sạch + ồn</td></tr>
+<tr><td>V</td><td>300 speaker train từng được giữ lại làm validation nội bộ ở giai đoạn đầu</td></tr>
+<tr><td>Bank nền train</td><td>34,103 đoạn yên lặng (300 phút) cắt từ 14,802 bản ghi train, trong 22,084 bản ghi đã quét (<code>exp/noise/trainbg.raw</code>)</td></tr>
+</tbody></table></div>
+<p class="small">Nguồn: <code>scripts/pipeline_clean.sh</code>; <code>exp/ft/S2c_clean/{args.json,log.txt}</code>, <code>exp/ft/S5c_clean/{args.json,log.txt}</code>;
+<code>sred/train.py</code>, <code>sred/augment.py</code>, <code>sred/models.py</code>, <code>sred/compress.py</code>, <code>sred/calibrate.py</code>, <code>sred/quality.py</code>,
+<code>sred/embed.py</code>; <code>scripts/qeval.py</code>, <code>scripts/backend_q5.py</code>, <code>scripts/private_q3.sh</code>, <code>scripts/kd_targets.py</code>;
+<code>eda/qsets.py</code>, <code>eda/build_trainbg_bank.py</code>, <code>eda/make_full_split_list.py</code>; <code>exp/public_eval/metrics.json</code>,
+<code>exp/public_eval/public_bench.py</code>; <code>exp/logs/{clean_public,clean_private}.log</code>; <code>EXPERIMENTS.md</code> (Round T/K, C2, P, S-clean);
+<code>releases/version_211026_C2Q3_package/</code> (tài liệu kiến trúc và nén).</p>
+
+</main>
+</body>
+</html>
